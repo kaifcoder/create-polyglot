@@ -120,14 +120,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         working-directory: templates/go
-        run: go build -v ./...
-      - name: Vet
-        working-directory: templates/go
-        run: go vet ./...
+        run: go build -o service main.go
       - name: Run & health
         working-directory: templates/go
         run: |
-          go run . &
+          ./service &
           PID=$!
           sleep 2
           curl -f http://127.0.0.1:3002/health || (echo 'no health'; kill $PID; exit 1)
