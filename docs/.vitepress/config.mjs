@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitepress';
 
 export default defineConfig({
+  // Adjust base for GitHub Pages project site. When deploying under
+  // https://<user>.github.io/<repo>/ the base must be '/<repo>/'. The workflow
+  // sets VITEPRESS_BASE automatically; local dev stays '/'.
+  base: process.env.VITEPRESS_BASE || '/',
   title: 'create-polyglot',
   description: 'Scaffold polyglot microservice monorepos (Node, Python, Go, Java, Next.js)',
   head: [
