@@ -1,6 +1,6 @@
 {
   "name": "create-polyglot",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Scaffold polyglot microservice monorepos with built-in templates for Node, Python, Go, and more.",
   "main": "bin/index.js",
   "scripts": {
