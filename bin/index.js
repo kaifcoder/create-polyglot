@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { scaffoldMonorepo, addService, scaffoldPlugin } from './lib/scaffold.js';
+import { runDev } from './lib/dev.js';
 
 const program = new Command();
 
@@ -92,6 +93,14 @@ program
       console.error(chalk.red('Failed to add:'), e.message);
       process.exit(1);
     }
+  });
+
+program
+  .command('dev')
+  .description('Run services locally (Node & frontend) or use --docker for compose')
+  .option('--docker', 'Use docker compose up --build to start all services')
+  .action(async (opts) => {
+    await runDev({ docker: !!opts.docker });
   });
 
 program.parse();

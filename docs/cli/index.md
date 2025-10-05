@@ -15,3 +15,15 @@ Add a plugin:
 ```bash
 create-polyglot add plugin kafka
 ```
+
+Run dev (local processes):
+```bash
+create-polyglot dev
+```
+
+Run dev via Docker Compose:
+```bash
+create-polyglot dev --docker
+```
+
+Health endpoints are polled at `/health` on each service port with a 15s timeout.

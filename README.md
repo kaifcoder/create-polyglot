@@ -31,6 +31,16 @@ Add a plugin scaffold:
 create-polyglot add plugin postgres
 ```
 
+Run all services in dev mode (Node & frontend locally; others manual unless using docker):
+```bash
+create-polyglot dev
+```
+
+Run everything via Docker Compose:
+```bash
+create-polyglot dev --docker
+```
+
 ## Commands
 
 | Command | Description |
@@ -38,6 +48,7 @@ create-polyglot add plugin postgres
 | `create-polyglot init <name>` | Scaffold a new workspace (root invocation without `init` is deprecated). |
 | `create-polyglot add service <name>` | Add a service after init (`--type`, `--port`, `--yes`). |
 | `create-polyglot add plugin <name>` | Create plugin skeleton under `plugins/<name>`. |
+| `create-polyglot dev [--docker]` | Run Node & frontend services locally or all via compose. |
 
 ## Init Options
 
@@ -91,6 +102,11 @@ Non-Node services start manually or via compose:
 ```
 cd services/python && uvicorn app.main:app --reload
 ```
+
+### polyglot dev Command
+`create-polyglot dev` reads `polyglot.json`, launches Node & frontend services that expose a `dev` script, assigns each a colorized log prefix, and probes `http://localhost:<port>/health` until ready (15s timeout). Pass `--docker` to instead delegate to `docker compose up --build` for all services.
+
+If a service lacks a `dev` script it is skipped with no error. Non-Node services (python/go/java) are not auto-started yet unless you choose `--docker`.
 
 ### Docker & Compose
 For each selected service a Dockerfile is generated. A `compose.yaml` includes:
