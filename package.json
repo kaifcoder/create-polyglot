@@ -1,7 +1,7 @@
 {
   "name": "create-polyglot",
   "version": "1.1.0",
-  "description": "CLI to scaffold a polyglot microservice monorepo",
+  "description": "Scaffold polyglot microservice monorepos with built-in templates for Node, Python, Go, and more.",
   "main": "bin/index.js",
   "scripts": {
     "create-polyglot": "node ./bin/index.js",
@@ -10,13 +10,31 @@
   "bin": {
     "create-polyglot": "bin/index.js"
   },
-  "keywords": [],
+  "keywords": [
+    "monorepo",
+    "microservices",
+    "polyglot",
+    "scaffold",
+    "cli",
+    "generator",
+    "turborepo",
+    "nx",
+    "docker"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaifcoder/create-polyglot.git"
+  },
+  "homepage": "https://github.com/kaifcoder/create-polyglot#readme",
+  "bugs": {
+    "url": "https://github.com/kaifcoder/create-polyglot/issues"
+  },
   "files": [
     "bin",
     "templates",
     "scripts"
   ],
-  "author": "kaifcoder",
+  "author": "kaifcoder <kaifmohd2014@gmail.com>",
   "license": "MIT",
   "type": "module",
   "dependencies": {
