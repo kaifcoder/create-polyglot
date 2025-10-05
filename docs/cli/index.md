@@ -1,12 +1,17 @@
 # CLI Usage
 
-Basic usage:
+Initialize:
 ```bash
-create-polyglot <project-name> [options]
+create-polyglot init my-org -s node,python --preset turborepo --git
 ```
-If `<project-name>` is omitted you will be prompted.
+Root invocation without `init` is deprecated.
 
-Example:
+Add a service:
 ```bash
-create-polyglot my-org -s node,python --preset turborepo --git
+create-polyglot add service analytics --type node --port 4300
+```
+
+Add a plugin:
+```bash
+create-polyglot add plugin kafka
 ```

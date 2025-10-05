@@ -9,13 +9,14 @@ const fs = require('fs');
 const path = require('path');
 
 const root = process.cwd();
-const appsDir = path.join(root, 'apps');
-if (!fs.existsSync(appsDir)) {
-  console.error('No apps directory found.');
+// Updated to new structure: services directory replaces apps
+const servicesDir = path.join(root, 'services');
+if (!fs.existsSync(servicesDir)) {
+  console.error('No services directory found.');
   process.exit(1);
 }
 
-const services = fs.readdirSync(appsDir);
+const services = fs.readdirSync(servicesDir);
 
 // Determine the root package manager heuristically
 function detectPM() {
@@ -41,7 +42,7 @@ function prefix(name, data) {
 }
 
 services.forEach(svc => {
-  const svcPath = path.join(appsDir, svc);
+  const svcPath = path.join(servicesDir, svc);
   const pkgPath = path.join(svcPath, 'package.json');
   if (!fs.existsSync(pkgPath)) {
     console.log(`Skipping ${svc} (no package.json; likely non-Node service)`);

@@ -1,6 +1,6 @@
 # create-polyglot
 
-CLI to scaffold a polyglot microservice monorepo (Node.js, Python/FastAPI, Go, Java Spring Boot, Next.js frontend) with optional Turborepo or Nx presets, Docker assets, shared packages, and an interactive wizard.
+CLI to scaffold a polyglot microservice monorepo (Node.js, Python/FastAPI, Go, Java Spring Boot, Next.js frontend) with optional Turborepo or Nx presets, Docker assets, shared packages, an interactive wizard, post-init service/plugin additions, and a persisted `polyglot.json` config.
 
 ## Installation (local dev)
 
@@ -12,16 +12,34 @@ npm link # or: pnpm link --global / yarn link / bun link
 Then run (non-interactive example):
 
 ```bash
-create-polyglot my-org -s node,python,go,java,frontend --git
+create-polyglot init my-org -s node,python,go,java,frontend --git --yes
 ```
 
 Interactive (wizard prompts for any missing info):
 
 ```bash
-create-polyglot my-org
+create-polyglot init my-org
 ```
 
-## Options
+Add a service later:
+```bash
+create-polyglot add service payments --type node --port 4100
+```
+
+Add a plugin scaffold:
+```bash
+create-polyglot add plugin postgres
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `create-polyglot init <name>` | Scaffold a new workspace (root invocation without `init` is deprecated). |
+| `create-polyglot add service <name>` | Add a service after init (`--type`, `--port`, `--yes`). |
+| `create-polyglot add plugin <name>` | Create plugin skeleton under `plugins/<name>`. |
+
+## Init Options
 
 | Flag | Description |
 |------|-------------|
@@ -30,7 +48,7 @@ create-polyglot my-org
 | `--git` | Initialize git repo & initial commit |
 | `--no-install` | Skip dependency installation step |
 | `--package-manager <pm>` | One of `npm|pnpm|yarn|bun` (default: detect or npm) |
-| `--frontend-generator <gen>` | Currently: `create-next-app` (else falls back to template) |
+| `--frontend-generator` | Use `create-next-app` (falls back to template on failure) |
 | `--force` | Overwrite existing target directory if it exists |
 
 If you omit flags, the wizard will prompt interactively (similar to `create-next-app`).
@@ -38,34 +56,23 @@ If you omit flags, the wizard will prompt interactively (similar to `create-next
 ## Generated Structure
 ```
 my-org/
-  apps/
-    node/
-    python/
-    go/
-    java/ (spring-boot template)
-    frontend/
-  packages/
-  package.json
-```
-
-### Generated Structure (Baseline)
-
-```
-my-org/
-  apps/
-    node/          # Express + nodemon dev script
+  services/
+    node/          # Express + dev script
     python/        # FastAPI + uvicorn
-    go/            # net/http service
+    go/            # Go net/http service
     java/          # Spring Boot (Maven)
     frontend/      # Next.js (template or create-next-app output)
+  gateway/
+  infra/
   packages/
-    shared/        # Example shared util (Node)
-  docker/          # Per-service Dockerfiles (if not placed inline) *optional*
-  compose.yaml     # Generated docker-compose for all selected services
-  package.json     # Workspaces + scripts
+    shared/
+  plugins/         # created when adding plugins
+  compose.yaml
+  polyglot.json    # persisted configuration
+  package.json
   turbo.json / nx.json (if preset chosen)
   scripts/
-    dev-basic.cjs  # Basic concurrent runner (no preset)
+    dev-basic.cjs
 ```
 
 ### Presets
@@ -74,15 +81,15 @@ my-org/
 - Basic: Provides a minimal setup plus `scripts/dev-basic.cjs` for simple concurrency.
 
 ### Basic Dev Runner
-When no preset is chosen, `npm run dev` (or your selected package manager) invokes `scripts/dev-basic.cjs` which:
+When no preset is chosen, `npm run dev` uses `scripts/dev-basic.cjs`:
 1. Detects package manager (pnpm > yarn > bun > npm fallback)
-2. Scans `apps/` directories
-3. Starts only services with a `package.json` containing a `dev` script
-4. Prefixes each line of output with the service name
+2. Scans `services/` for Node services
+3. Runs those with a `dev` script
+4. Prefixes log lines with service name
 
-Non-Node services (Python/Go/Spring) are skipped automatically; start them manually as needed:
+Non-Node services start manually or via compose:
 ```
-cd apps/python && uvicorn main:app --reload
+cd services/python && uvicorn app.main:app --reload
 ```
 
 ### Docker & Compose
@@ -95,8 +102,25 @@ You can extend compose with volumes, env vars, or database services after genera
 ### Frontend Generation
 If `--frontend-generator create-next-app` is supplied, the tool shells out to `npx create-next-app` (respecting the chosen package manager for installs). If it fails, a fallback static template is used.
 
+### polyglot.json
+Example:
+```jsonc
+{
+  "name": "my-org",
+  "preset": "none",
+  "packageManager": "npm",
+  "services": [
+    { "name": "node", "type": "node", "port": 3001, "path": "services/node" }
+  ]
+}
+```
+Used by `add service` to assert uniqueness and regenerate `compose.yaml`.
+
+### Plugins
+`create-polyglot add plugin <name>` scaffolds `plugins/<name>/index.js` with a hook skeleton (`afterInit`). Future releases will execute hooks automatically during lifecycle events.
+
 ### Shared Package
-An example `packages/shared` workspace demonstrates sharing Node utilities across services. Expand or add more workspaces as needed.
+`packages/shared` shows cross-service Node utilities. Extend or add per-language shared modules.
 
 ### Force Overwrite
 If the target directory already exists, the CLI aborts unless `--force` is passed. Use with caution.
@@ -108,11 +132,13 @@ Pass `--git` to automatically run `git init`, create an initial commit, and (if 
 Generates ESLint + Prettier base configs at the root. Extend rules per service if needed.
 
 ### Roadmap / Ideas
+- Plugin hook execution pipeline
 - Healthchecks and depends_on in `compose.yaml`
-- Additional generators (e.g. Remix, Astro, SvelteKit)
+- Additional generators (Remix, Astro, SvelteKit)
 - Automatic test harness & CI workflow template
-- Language-specific shared libs examples (Python package, Go module)
+- Language-specific shared libs (Python package, Go module)
 - Hot reload integration aggregator
+- Remove service / remove plugin commands
 
 ## License
 MIT

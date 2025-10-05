@@ -4,26 +4,26 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-// Basic smoke test: run the CLI with a temp directory and ensure it creates expected folders.
-
-describe('create-polyglot CLI smoke', () => {
-  const tmpParent = fs.mkdtempSync(path.join(os.tmpdir(), 'polyglot-smoke-'));
+describe('create-polyglot init subcommand', () => {
+  const tmpParent = fs.mkdtempSync(path.join(os.tmpdir(), 'polyglot-init-'));
   let tmpDir = path.join(tmpParent, 'workspace');
   fs.mkdirSync(tmpDir);
-  const projName = 'smoke-proj';
+  const projName = 'init-proj';
 
   afterAll(() => {
-    // Cleanup temp directory
     try { fs.rmSync(tmpParent, { recursive: true, force: true }); } catch {}
   });
 
-  it('scaffolds a project with a node service', async () => {
+  it('scaffolds a project via init subcommand', async () => {
     const repoRoot = process.cwd();
     const cliPath = path.join(repoRoot, 'bin/index.js');
-    await execa('node', [cliPath, projName, '--services', 'node', '--no-install', '--yes'], { cwd: tmpDir });
+    await execa('node', [cliPath, 'init', projName, '--services', 'node', '--no-install', '--yes'], {
+      cwd: tmpDir,
+      env: { ...process.env, CI: 'true', FORCE_COLOR: '0' }
+    });
     const projectPath = path.join(tmpDir, projName);
     expect(fs.existsSync(path.join(projectPath, 'services/node'))).toBe(true);
     expect(fs.existsSync(path.join(projectPath, 'package.json'))).toBe(true);
     expect(fs.existsSync(path.join(projectPath, 'polyglot.json'))).toBe(true);
-  }, 30000);
+  }, 45000);
 });

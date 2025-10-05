@@ -1,11 +1,17 @@
 {
   "name": "create-polyglot",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Scaffold polyglot microservice monorepos with built-in templates for Node, Python, Go, and more.",
   "main": "bin/index.js",
   "scripts": {
     "create-polyglot": "node ./bin/index.js",
     "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "prepublishOnly": "npm test",
+    "release:patch": "npm version patch && npm publish",
+    "release:minor": "npm version minor && npm publish",
+    "release:major": "npm version major && npm publish",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
