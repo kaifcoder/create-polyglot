@@ -1,0 +1,30 @@
+{
+  "name": "create-polyglot",
+  "version": "1.1.0",
+  "description": "CLI to scaffold a polyglot microservice monorepo",
+  "main": "bin/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "create-polyglot": "node ./bin/index.js"
+  },
+  "bin": {
+    "create-polyglot": "bin/index.js"
+  },
+  "keywords": [],
+  "files": [
+    "bin",
+    "templates",
+    "scripts"
+  ],
+  "author": "kaifcoder",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^14.0.1",
+    "degit": "^2.8.4",
+    "execa": "^9.6.0",
+    "fs-extra": "^11.3.2",
+    "prompts": "^2.4.2"
+  }
+}
