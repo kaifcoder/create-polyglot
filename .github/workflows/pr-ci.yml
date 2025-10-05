@@ -63,7 +63,7 @@ jobs:
         run: echo 'No lint config yet';
       - name: Smoke run
         working-directory: templates/node
-        run: node src/index.js & sleep 2 && curl -f http://localhost:3001/ || echo 'Sample run complete'
+        run: node src/index.js & PID=$!; sleep 2; curl -f http://localhost:3001/health; kill $PID || true
 
   frontend:
     name: Next.js Template
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         working-directory: templates/go
-        run: go build -v ./...
+        run: go build -v -o service main.go
       - name: Vet
         working-directory: templates/go
         run: go vet ./...
