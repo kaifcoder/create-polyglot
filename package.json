@@ -5,7 +5,10 @@
   "main": "bin/index.js",
   "scripts": {
     "create-polyglot": "node ./bin/index.js",
-  "test": "vitest run"
+  "test": "vitest run",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "bin": {
     "create-polyglot": "bin/index.js"
@@ -46,6 +49,7 @@
     "prompts": "^2.4.2"
   },
   "devDependencies": {
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "vitepress": "^1.3.3"
   }
 }

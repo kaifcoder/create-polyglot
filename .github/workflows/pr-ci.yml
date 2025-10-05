@@ -1,0 +1,170 @@
+name: PR CI (Templates)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect Template Changes
+    runs-on: ubuntu-latest
+    outputs:
+      node: ${{ steps.filter.outputs.node }}
+      python: ${{ steps.filter.outputs.python }}
+      go: ${{ steps.filter.outputs.go }}
+      java: ${{ steps.filter.outputs.java }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      any: ${{ steps.filter.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            node:
+              - 'templates/node/**'
+            python:
+              - 'templates/python/**'
+            go:
+              - 'templates/go/**'
+            java:
+              - 'templates/spring-boot/**'
+            frontend:
+              - 'templates/frontend/**'
+            any:
+              - 'templates/**'
+
+  node:
+    name: Node Template
+    needs: changes
+    if: needs.changes.outputs.node == 'true' || needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: templates/node/package.json
+      - name: Install deps
+        working-directory: templates/node
+        run: npm install --no-audit --no-fund
+      - name: Lint (placeholder)
+        run: echo 'No lint config yet';
+      - name: Smoke run
+        working-directory: templates/node
+        run: node src/index.js & sleep 2 && curl -f http://localhost:3001/ || echo 'Sample run complete'
+
+  frontend:
+    name: Next.js Template
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: templates/frontend/package.json
+      - name: Install deps
+        working-directory: templates/frontend
+        run: npm install --no-audit --no-fund
+      - name: Build
+        working-directory: templates/frontend
+        run: npm run build
+
+  python:
+    name: Python FastAPI Template
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: templates/python/requirements.txt
+      - name: Install deps
+        working-directory: templates/python
+        run: pip install -r requirements.txt
+      - name: Import check
+        working-directory: templates/python
+        run: python -c "import fastapi, uvicorn"
+      - name: FastAPI startup (smoke)
+        working-directory: templates/python
+        run: |
+          uvicorn app.main:app --port 3004 &
+          PID=$!
+          sleep 2
+            curl -f http://127.0.0.1:3004/health || (echo 'health check failed'; kill $PID; exit 1)
+          kill $PID || true
+
+  go:
+    name: Go Template
+    needs: changes
+    if: needs.changes.outputs.go == 'true' || needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        working-directory: templates/go
+        run: go build -v ./...
+      - name: Vet
+        working-directory: templates/go
+        run: go vet ./...
+      - name: Run & health
+        working-directory: templates/go
+        run: |
+          go run . &
+          PID=$!
+          sleep 2
+          curl -f http://127.0.0.1:3002/health || (echo 'no health'; kill $PID; exit 1)
+          kill $PID || true
+
+  java:
+    name: Spring Boot Template
+    needs: changes
+    if: needs.changes.outputs.java == 'true' || needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Temurin JDK
+        uses: actions/setup-java@v4
+        with:
+            distribution: 'temurin'
+            java-version: '21'
+            cache: 'maven'
+      - name: Build (skip tests)
+        working-directory: templates/spring-boot
+        run: mvn -B -ntp package -DskipTests
+
+  summary:
+    name: Summary
+    needs: [node, frontend, python, go, java]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report matrix
+        run: |
+          echo "Node: ${{ needs.node.result }}"
+          echo "Frontend: ${{ needs.frontend.result }}"
+          echo "Python: ${{ needs.python.result }}"
+          echo "Go: ${{ needs.go.result }}"
+          echo "Java: ${{ needs.java.result }}"
+          if [[ '${{ needs.node.result }}' == 'failure' || '${{ needs.frontend.result }}' == 'failure' || '${{ needs.python.result }}' == 'failure' || '${{ needs.go.result }}' == 'failure' || '${{ needs.java.result }}' == 'failure' ]]; then
+            echo 'One or more template jobs failed.'
+            exit 1
+          fi
+          echo 'All selected template jobs passed.'

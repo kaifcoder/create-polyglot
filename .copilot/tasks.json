@@ -1,0 +1,100 @@
+{
+  "version": "1.0.0",
+  "name": "Create Polyglot Framework Tasks",
+  "description": "Task plan for developing the create-polyglot CLI framework for polyglot microservices.",
+  "tasks": [
+    {
+      "id": "init-cli",
+      "title": "Initialize CLI Project Structure",
+      "description": "Set up the Node.js CLI using oclif or Commander. Add basic command parsing and help menus.",
+      "steps": [
+        "Run `npm init -y` and install dependencies (`commander`, `execa`, `chalk`, `inquirer`).",
+        "Set up `bin/create-polyglot.js` entry point.",
+        "Implement the CLI banner and basic help text.",
+        "Add version and --help flags."
+      ]
+    },
+    {
+      "id": "add-init-command",
+      "title": "Implement `init` Command",
+      "description": "Scaffold a new polyglot monorepo structure.",
+      "steps": [
+        "Add `polyglot init` command to create folder structure `/services`, `/gateway`, `/infra`.",
+        "Generate a base README.md and polyglot.json config file.",
+        "Prompt user for project name and default languages."
+      ]
+    },
+    {
+      "id": "add-service-command",
+      "title": "Implement `add service` Command",
+      "description": "Generate new microservice boilerplate based on selected language and framework.",
+      "steps": [
+        "Add `polyglot add service <name> --lang <language> --framework <framework>` command.",
+        "Copy templates from `/templates/{language}-{framework}`.",
+        "Inject service metadata into `polyglot.json`.",
+        "Generate Dockerfile and add service entry in `docker-compose.yml`."
+      ]
+    },
+    {
+      "id": "add-dev-command",
+      "title": "Implement `polyglot dev` Command",
+      "description": "Run all microservices concurrently using Docker Compose or concurrently package.",
+      "steps": [
+        "Add `polyglot dev` command to spin up all services.",
+        "Show colored logs for each service (use chalk or pino-pretty).",
+        "Detect health endpoints automatically."
+      ]
+    },
+    {
+      "id": "add-plugin-system",
+      "title": "Add Plugin System",
+      "description": "Implement plugin-based architecture for extensibility.",
+      "steps": [
+        "Design plugin interface (install scripts, templates, hooks).",
+        "Add `polyglot add plugin <name>` command.",
+        "Create official plugins for Postgres, Kafka, and Auth."
+      ]
+    },
+    {
+      "id": "template-examples",
+      "title": "Add Template Examples",
+      "description": "Provide ready-to-run templates for common frameworks.",
+      "steps": [
+        "Add Node/Express, Python/FastAPI, Java/Spring Boot templates under /templates.",
+        "Each should include minimal code + Dockerfile + README.",
+        "Test generation for all combinations."
+      ]
+    },
+    {
+      "id": "setup-ci",
+      "title": "Setup GitHub CI for Testing & Build",
+      "description": "Add GitHub Actions to test and build the CLI automatically.",
+      "steps": [
+        "Add `.github/workflows/test.yml` for lint + test + build.",
+        "Run `npm test` on PRs.",
+        "Publish new versions automatically to npm when tagged."
+      ]
+    },
+    {
+      "id": "docs-and-readme",
+      "title": "Add Documentation & README",
+      "description": "Create compelling documentation for create-polyglot.",
+      "steps": [
+        "Write detailed README with examples and diagrams.",
+        "Add CONTRIBUTING.md and templates for issues/PRs.",
+        "Prepare docs site using Docusaurus or VitePress."
+      ]
+    },
+    {
+      "id": "release-v1",
+      "title": "Prepare v1.0 Release",
+      "description": "Finalize and publish the first stable version.",
+      "steps": [
+        "Test all commands end-to-end.",
+        "Bump version to 1.0.0.",
+        "Publish to npm (`npm publish`).",
+        "Announce release on GitHub, Reddit, and ProductHunt."
+      ]
+    }
+  ]
+}
