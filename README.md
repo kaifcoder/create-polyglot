@@ -132,3 +132,6 @@ Preview production build:
 npm run docs:preview
 ```
 Docs source lives in `docs/` with sidebar-driven structure defined in `docs/.vitepress/config.mjs`.
+
+### Deployment
+Docs are auto-deployed to GitHub Pages on pushes to `main` that touch `docs/` via `.github/workflows/docs.yml`. The base path is set using `VITEPRESS_BASE=/create-polyglot/`.
