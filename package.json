@@ -4,7 +4,6 @@
   "description": "CLI to scaffold a polyglot microservice monorepo",
   "main": "bin/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "create-polyglot": "node ./bin/index.js"
   },
   "bin": {
