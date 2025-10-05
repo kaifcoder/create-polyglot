@@ -116,3 +116,19 @@ Generates ESLint + Prettier base configs at the root. Extend rules per service i
 
 ## License
 MIT
+
+## Documentation Site (VitePress)
+
+Local docs development:
+```bash
+npm run docs:dev
+```
+Build static site:
+```bash
+npm run docs:build
+```
+Preview production build:
+```bash
+npm run docs:preview
+```
+Docs source lives in `docs/` with sidebar-driven structure defined in `docs/.vitepress/config.mjs`.
