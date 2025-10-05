@@ -4,7 +4,8 @@
   "description": "CLI to scaffold a polyglot microservice monorepo",
   "main": "bin/index.js",
   "scripts": {
-    "create-polyglot": "node ./bin/index.js"
+    "create-polyglot": "node ./bin/index.js",
+  "test": "vitest run"
   },
   "bin": {
     "create-polyglot": "bin/index.js"
@@ -25,5 +26,8 @@
     "execa": "^9.6.0",
     "fs-extra": "^11.3.2",
     "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
   }
 }

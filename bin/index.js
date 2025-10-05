@@ -22,6 +22,7 @@ program
   .option("--force", "Overwrite if directory exists and not empty")
   .option("--package-manager <pm>", "npm | pnpm | yarn | bun (default: npm)")
   .option("--frontend-generator", "Use create-next-app to scaffold the frontend instead of the bundled template")
+  .option("--yes", "Skip confirmation (assume yes) for non-interactive use")
   .action(async (projectNameArg, options) => {
     try {
       // Collect interactive data if arguments / flags not provided
@@ -92,12 +93,23 @@ program
 
       let answers = {};
       if (interactiveQuestions.length) {
-        answers = await prompts(interactiveQuestions, {
-          onCancel: () => {
-            console.log(chalk.red('\n✖ Cancelled.'));
-            process.exit(1);
+        if (options.yes) {
+          // Auto-fill defaults when --yes is used
+          for (const q of interactiveQuestions) {
+            if (q.name === 'projectName') answers.projectName = projectNameArg || 'app';
+            if (q.name === 'services') answers.services = ['node'];
+            if (q.name === 'preset') answers.preset = '';
+            if (q.name === 'packageManager') answers.packageManager = 'npm';
+            if (q.name === 'git') answers.git = false;
           }
-        });
+        } else {
+          answers = await prompts(interactiveQuestions, {
+            onCancel: () => {
+              console.log(chalk.red('\n✖ Cancelled.'));
+              process.exit(1);
+            }
+          });
+        }
       }
 
       projectName = projectName || answers.projectName;
@@ -230,12 +242,16 @@ program
       console.table(services.map(s => ({ type: s.type, name: s.name, port: s.port })));
       console.log(`Preset: ${options.preset || 'none'}`);
       console.log(`Package Manager: ${options.packageManager}`);
-      const { proceed } = await prompts({
-        type: 'confirm',
-        name: 'proceed',
-        message: 'Proceed with scaffold?',
-        initial: true
-      });
+      let proceed = true;
+      if (!options.yes) {
+        const answer = await prompts({
+          type: 'confirm',
+          name: 'proceed',
+          message: 'Proceed with scaffold?',
+          initial: true
+        });
+        proceed = answer.proceed;
+      }
       if (!proceed) {
         console.log(chalk.red('✖ Aborted by user.'));
         process.exit(1);
