@@ -1,0 +1,51 @@
+version: '3.9'
+
+services:
+  python:
+    build:
+      context: ./apps/python
+    container_name: sample-python
+    ports:
+      - "3004:3004"
+    environment:
+      PORT: 3004
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  go:
+    build:
+      context: ./apps/go
+    container_name: sample-go
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+    networks:
+      - app-net
+    depends_on:
+      python:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  app-net:
+    driver: bridge
