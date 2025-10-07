@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import chalk from 'chalk';
+
 import { scaffoldMonorepo, addService, scaffoldPlugin } from './lib/scaffold.js';
 import { runDev } from './lib/dev.js';
 
 const program = new Command();
+
 
 program
   .name('create-polyglot')
