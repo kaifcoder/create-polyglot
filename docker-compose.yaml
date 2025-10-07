@@ -12,7 +12,7 @@ services:
     networks:
       - app-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:3004/health').getcode() == 200 else exit(1)"]
       interval: 10s
       timeout: 5s
       retries: 5
