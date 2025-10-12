@@ -2,6 +2,9 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { scaffoldMonorepo, addService, scaffoldPlugin } from './lib/scaffold.js';
+import fs from 'fs';
+import path from 'path';
+import { renderServicesTable } from './lib/ui.js';
 import { runDev } from './lib/dev.js';
 
 const program = new Command();
@@ -101,6 +104,30 @@ program
   .option('--docker', 'Use docker compose up --build to start all services')
   .action(async (opts) => {
     await runDev({ docker: !!opts.docker });
+  });
+
+program
+  .command('services')
+  .description('List services in the current workspace (table)')
+  .option('--json', 'Output raw JSON instead of table')
+  .action(async (opts) => {
+    try {
+      const cwd = process.cwd();
+      const cfgPath = path.join(cwd, 'polyglot.json');
+      if (!fs.existsSync(cfgPath)) {
+        console.log(chalk.red('polyglot.json not found. Run inside a generated workspace.'));
+        process.exit(1);
+      }
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      if (opts.json) {
+        console.log(JSON.stringify(cfg.services, null, 2));
+      } else {
+        renderServicesTable(cfg.services, { title: 'Workspace Services' });
+      }
+    } catch (e) {
+      console.error(chalk.red('Failed to list services:'), e.message);
+      process.exit(1);
+    }
   });
 
 program.parse();
