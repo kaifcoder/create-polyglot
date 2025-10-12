@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
+      
+      - name: Remove node_modules and package-lock.json
+        run: rm -rf node_modules package-lock.json
       - run: npm i
       - run: npm publish
         env:
