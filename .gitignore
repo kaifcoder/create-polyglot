@@ -144,3 +144,4 @@ vite.config.ts.timestamp-*
 # smoke test files
 .smoke-test-*
 .tmp-smoke/** 
+.DS_Store
