@@ -1,0 +1,13 @@
+{
+  "name": "demo",
+  "preset": "none",
+  "packageManager": "npm",
+  "services": [
+    {
+      "name": "node",
+      "type": "node",
+      "port": 3001,
+      "path": "services/node"
+    }
+  ]
+}

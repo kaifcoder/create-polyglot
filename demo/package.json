@@ -1,0 +1,21 @@
+{
+  "name": "demo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev-basic.cjs",
+    "list:services": "ls apps",
+    "format": "prettier --write .",
+    "lint": "eslint \"apps/**/*.{js,jsx,ts,tsx}\" --max-warnings 0 || true"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "eslint": "^9.11.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1"
+  }
+}
