@@ -15,7 +15,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      - name: Remove node_modules and package-lock.json
+        run: rm -rf node_modules package-lock.json 
+      - name: install dependencies
+        run: npm install
       - run: npm test
 
   publish-npm:
