@@ -29,10 +29,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
+      - name: Remove node_modules and package-lock.json
+        run: rm -rf node_modules package-lock.json 
       - name: Install deps
-        run: npm ci
-
+        run: npm i
       - name: Build VitePress site
         env:
           VITEPRESS_BASE: /create-polyglot/
