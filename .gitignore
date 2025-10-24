@@ -145,3 +145,5 @@ vite.config.ts.timestamp-*
 .smoke-test-*
 .tmp-smoke/** 
 .DS_Store
+.vscode/*
+.idea/
