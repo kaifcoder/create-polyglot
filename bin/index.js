@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import chalk from 'chalk';
-
+ 
 import { scaffoldMonorepo, addService, scaffoldPlugin } from './lib/scaffold.js';
 import fs from 'fs';
 import path from 'path';
 import { renderServicesTable } from './lib/ui.js';
 import { runDev } from './lib/dev.js';
-
+import { startAdminDashboard } from './lib/admin.js';
+ 
 const program = new Command();
-
-
+ 
+ 
 program
   .name('create-polyglot')
   .description('Scaffold a polyglot microservice monorepo');
-
+ 
 // New explicit init subcommand (Task: add-init-command)
 program
   .command('init')
@@ -30,7 +31,7 @@ program
   .action(async (projectNameArg, options) => {
     await scaffoldMonorepo(projectNameArg, options);
   });
-
+ 
 // Backward compatibility: calling the root command directly still scaffolds (deprecated path).
 program
   .argument('[project-name]', '(Deprecated: call `create-polyglot init <name>` instead) Project name')
@@ -49,7 +50,7 @@ program
     }
     await scaffoldMonorepo(projectNameArg, options);
   });
-
+ 
 // Additional commands must be registered before final parse.
 program
   .command('add')
@@ -99,7 +100,7 @@ program
       process.exit(1);
     }
   });
-
+ 
 program
   .command('dev')
   .description('Run services locally (Node & frontend) or use --docker for compose')
@@ -107,7 +108,7 @@ program
   .action(async (opts) => {
     await runDev({ docker: !!opts.docker });
   });
-
+ 
 program
   .command('services')
   .description('List services in the current workspace (table)')
@@ -131,6 +132,39 @@ program
       process.exit(1);
     }
   });
-
+ 
+program
+  .command('admin')
+  .description('Launch admin dashboard to monitor service status')
+  .option('-p, --port <port>', 'Dashboard port (default: 8080)', '8080')
+  .option('-r, --refresh <ms>', 'Refresh interval in milliseconds (default: 5000)', '5000')
+  .option('--no-open', 'Don\'t auto-open browser')
+  .action(async (opts) => {
+    try {
+      const port = parseInt(opts.port);
+      const refresh = parseInt(opts.refresh);
+      
+      if (isNaN(port) || port < 1 || port > 65535) {
+        console.error(chalk.red('Invalid port number. Must be between 1-65535.'));
+        process.exit(1);
+      }
+      
+      if (isNaN(refresh) || refresh < 1000) {
+        console.error(chalk.red('Invalid refresh interval. Must be at least 1000ms.'));
+        process.exit(1);
+      }
+      
+      await startAdminDashboard({
+        port,
+        refresh,
+        open: opts.open
+      });
+    } catch (e) {
+      console.error(chalk.red('Failed to start admin dashboard:'), e.message);
+      process.exit(1);
+    }
+  });
+ 
 program.parse();
-
+ 
+ 
