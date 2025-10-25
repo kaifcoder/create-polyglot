@@ -39,14 +39,14 @@
   "funding": {
     "channels": [
       {
-        "guid": "MyBank",
+        "guid": "mybank",
         "type": "bank",
         "description": "contact me on my email (kaifmohd2014@gmail.com) to get account details "
       }
     ],
     "plans": [
       {
-        "guid": "MyBank",
+        "guid": "mybank-dev-support",
         "status": "active",
         "name": "Development Support Plan",
         "description": "This will cover the cost of one developer working part-time on the project",
@@ -54,7 +54,7 @@
         "currency": "USD",
         "frequency": "monthly",
         "channels": [
-          "MyBank"
+          "mybank"
         ]
       }
     ],
