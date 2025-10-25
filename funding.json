@@ -1,0 +1,63 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Mohd Kaif",
+    "email": "kaifmohd2014@gmail.com",
+    "phone": "+919336834706",
+    "description": "Working as a full stack developer at SAP while pursuing M.tech in software engineering from BITS Pilani. ",
+    "webpageUrl": {
+      "url": "https://linktr.ee/mohdkaif0"
+    }
+  },
+  "projects": [
+    {
+      "guid": "create-polyglot",
+      "name": "Create Polyglot",
+      "description": "Scaffold polyglot microservice monorepos with built-in templates for Node, Python, Go, and more.",
+      "webpageUrl": {
+        "url": "https://kaifcoder.github.io/create-polyglot/"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/kaifcoder/create-polyglot"
+      },
+      "licenses": [
+        "MIT"
+      ],
+      "tags": [
+        "npm",
+        "microservice",
+        "nx",
+        "turborepo",
+        "python",
+        "node",
+        "scripting"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "MyBank",
+        "type": "bank",
+        "description": "contact me on my email (kaifmohd2014@gmail.com) to get account details "
+      }
+    ],
+    "plans": [
+      {
+        "guid": "MyBank",
+        "status": "active",
+        "name": "Development Support Plan",
+        "description": "This will cover the cost of one developer working part-time on the project",
+        "amount": 200,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": [
+          "MyBank"
+        ]
+      }
+    ],
+    "history": []
+  }
+}
