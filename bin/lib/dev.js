@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import http from 'http';
 import { initializeServiceLogs } from './logs.js';
 import { initializePlugins, callHook } from './plugin-system.js';
+import { registerRunningProcess, unregisterRunningProcess } from './service-manager.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -152,9 +153,15 @@ const args = ['run', useScript];
 
     const child = spawn(cmd, args, { cwd: svcPath, env: { ...process.env, PORT: String(svc.port) }, shell: true });
     procs.push(child);
+    
+    // Register with service manager for PID tracking
+    registerRunningProcess(svc.name, child, svc);
+    
     child.stdout.on('data', d => process.stdout.write(color(`[${svc.name}] `) + d.toString()));
     child.stderr.on('data', d => process.stderr.write(color(`[${svc.name}] `) + d.toString()));
     child.on('exit', code => {
+      // Unregister when process exits
+      unregisterRunningProcess(svc.name);
       process.stdout.write(color(`[${svc.name}] exited with code ${code}\n`));
     });
     // health check
@@ -193,7 +200,15 @@ const args = ['run', useScript];
         docker,
         mode: docker ? 'docker' : 'local'
       });
-      procs.forEach(p => p.kill('SIGINT')); 
+      
+      // Cleanup service registrations and kill processes
+      procs.forEach(p => {
+        if (p.serviceName && p.pid) {
+          unregisterRunningProcess(p.serviceName);
+        }
+        p.kill('SIGINT');
+      });
+      
       await callHook('after:dev:stop', {
         projectDir: cwd,
         docker,

@@ -7,6 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { getLogsForAPI, LogFileWatcher } from './logs.js';
 import { startService, stopService, restartService, getServiceStatus, getAllServiceStatuses, validateServiceCanRun } from './service-manager.js';
 import { initializePlugins, callHook } from './plugin-system.js';
+import { getResourceMonitor } from './resources.js';
  
 // ws helper
 function sendWebSocketMessage(ws, message) {
@@ -23,6 +24,7 @@ function sendWebSocketMessage(ws, message) {
 // Global log watcher instance
 let globalLogWatcher = null;
 let wsServer = null;
+let globalResourceMonitor = null;
 
 async function handleWebSocketMessage(ws, message) {
   if (message.type === 'start_log_stream') {
@@ -43,6 +45,70 @@ async function handleWebSocketMessage(ws, message) {
     sendWebSocketMessage(ws, { type: 'log_data', service: ws.serviceFilter, logs });
   } else if (message.type === 'stop_log_stream') {
     ws.serviceFilter = null;
+  } else if (message.type === 'start_metrics_stream') {
+    console.log('🔧 WebSocket: start_metrics_stream received, service:', message.service);
+    ws.metricsFilter = message.service || 'all';
+    console.log('🔧 WebSocket: metricsFilter set to:', ws.metricsFilter);
+    if (!globalResourceMonitor) {
+      sendWebSocketMessage(ws, { type: 'error', message: 'Resource monitor not initialized' });
+      return;
+    }
+    // Send current metrics in the expected format
+    const serviceFilter = ws.metricsFilter === 'all' ? null : ws.metricsFilter;
+    const currentMetrics = globalResourceMonitor.getCurrentMetrics(serviceFilter);
+    console.log('🔧 WebSocket: getCurrentMetrics returned:', serviceFilter ? 'single service' : Object.keys(currentMetrics || {}));
+    const services = [];
+    
+    // Convert metrics to array format expected by frontend
+    if (serviceFilter && currentMetrics) {
+      // Single service requested
+      services.push({
+        serviceName: serviceFilter,
+        timestamp: currentMetrics.timestamp,
+        cpu: { usage: currentMetrics.cpu || 0 },
+        memory: { percentage: currentMetrics.memory || 0 },
+        network: currentMetrics.network || { rx: 0, tx: 0 },
+        status: currentMetrics.status || 'unknown'
+      });
+    } else if (!serviceFilter && currentMetrics) {
+      // All services requested
+      for (const [serviceName, metrics] of Object.entries(currentMetrics)) {
+        if (metrics) {
+          services.push({
+            serviceName: serviceName,
+            timestamp: metrics.timestamp,
+            cpu: { usage: metrics.cpu || 0 },
+            memory: { percentage: metrics.memory || 0 },
+            network: metrics.network || { rx: 0, tx: 0 },
+            status: metrics.status || 'unknown'
+          });
+        }
+      }
+    }
+    
+    console.log('🔧 WebSocket: Sending metrics_data with', services.length, 'services');
+    sendWebSocketMessage(ws, { 
+      type: 'metrics_data', 
+      service: ws.metricsFilter, 
+      services: services,
+      systemInfo: globalResourceMonitor.getSystemInfo()
+    });
+  } else if (message.type === 'stop_metrics_stream') {
+    ws.metricsFilter = null;
+  } else if (message.type === 'get_metrics_history') {
+    if (!globalResourceMonitor) {
+      sendWebSocketMessage(ws, { type: 'error', message: 'Resource monitor not initialized' });
+      return;
+    }
+    const history = globalResourceMonitor.getMetricsHistory(message.service, {
+      since: message.since,
+      limit: message.limit || 100
+    });
+    sendWebSocketMessage(ws, { 
+      type: 'metrics_history', 
+      service: message.service, 
+      history 
+    });
   }
 }
 
@@ -68,6 +134,34 @@ function broadcastLogEvent(event, payload) {
       });
     } else if (event === 'logsCleared') {
       sendWebSocketMessage(ws, { type: 'logs_cleared', service: payload.service });
+    }
+  });
+}
+
+// Set up listener for real-time metrics updates
+function broadcastMetricsEvent(event, payload) {
+  if (!wsServer) return;
+  console.log(`🔧 Broadcasting ${event} to ${wsServer.clients.size} clients`);
+  wsServer.clients.forEach(ws => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    console.log(`🔧 Client metricsFilter: ${ws.metricsFilter}`);
+    // Only send to clients that requested metrics stream
+    if (!ws.metricsFilter) return;
+    // Filter by service if client requested specific service
+    if (ws.metricsFilter !== 'all' && payload.services) {
+      const filteredServices = payload.services.filter(s => s.serviceName === ws.metricsFilter);
+      if (filteredServices.length === 0) return;
+      payload = { ...payload, services: filteredServices };
+    }
+    
+    if (event === 'metricsUpdate') {
+      console.log(`🔧 Sending metrics_update to client with ${payload.services?.length || 0} services`);
+      sendWebSocketMessage(ws, {
+        type: 'metrics_update',
+        timestamp: payload.timestamp,
+        services: payload.services,
+        system: payload.system
+      });
     }
   });
 }
@@ -145,6 +239,7 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Polyglot Admin Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { margin:0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial, sans-serif; background:#f1f5f9; color:#0f172a; }
@@ -201,6 +296,108 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
     .log-level { font-weight:600; margin-right:8px; }
     .logs-empty { text-align:center; color:#6b7280; padding:60px 20px; }
     
+    /* Metrics section styles */
+    .metrics-section { margin-top:24px; }
+    .metrics-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .metrics-controls { display:flex; gap:8px; align-items:center; }
+    .metrics-controls select, .metrics-controls button { padding:6px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:.8rem; }
+    .metrics-controls button { background:#0369a1; color:#fff; border:none; cursor:pointer; transition:all 0.2s; }
+    .metrics-controls button:hover { background:#0284c7; transform:translateY(-1px); }
+    .metrics-controls button.secondary { background:#6b7280; }
+    .metrics-controls button.secondary:hover { background:#4b5563; }
+    
+    /* 3-tile grid layout */
+    .metrics-grid { 
+      display:grid; 
+      grid-template-columns:repeat(3, 1fr); 
+      gap:20px; 
+      margin-bottom:32px; 
+    }
+    @media (max-width: 1200px) {
+      .metrics-grid { grid-template-columns:1fr; }
+    }
+    @media (min-width: 768px) and (max-width: 1199px) {
+      .metrics-grid { grid-template-columns:repeat(2, 1fr); }
+    }
+    
+    /* Enhanced metric cards */
+    .metric-card { 
+      background:#fff; 
+      border-radius:8px; 
+      padding:16px; 
+      box-shadow:0 2px 8px rgba(0,0,0,0.06); 
+      border:1px solid #f1f5f9;
+      transition:all 0.3s ease;
+      position:relative;
+      overflow:hidden;
+      min-height:200px;
+      max-height:240px;
+    }
+    .metric-card:hover {
+      transform:translateY(-1px);
+      box-shadow:0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* Card-specific styling */
+    .cpu-card { border-left:3px solid #f59e0b; }
+    .memory-card { border-left:3px solid #8b5cf6; }
+    .network-card { border-left:3px solid #10b981; }
+    
+    /* Metric headers with icons */
+    .metric-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:12px;
+    }
+    .metric-header h3 { 
+      margin:0; 
+      font-size:0.9rem; 
+      font-weight:600; 
+      color:#1f2937; 
+    }
+    .metric-icon {
+      font-size:1.2rem;
+      opacity:0.7;
+    }
+    
+    /* Chart styling */
+    .metric-card canvas { 
+      width:100%; 
+      height:100px; 
+      border-radius:6px;
+      margin:8px 0;
+    }
+    
+    /* Enhanced stats */
+    .metric-stats { 
+      display:flex; 
+      justify-content:space-between; 
+      gap:8px;
+      margin-top:12px;
+    }
+    .stat-item {
+      flex:1;
+      text-align:center;
+      padding:6px;
+      background:#f8fafc;
+      border-radius:4px;
+    }
+    .stat-label {
+      display:block;
+      font-size:0.65rem;
+      color:#64748b;
+      text-transform:uppercase;
+      letter-spacing:0.3px;
+      margin-bottom:2px;
+    }
+    .current-value, .avg-value, .rx-value, .tx-value { 
+      display:block;
+      font-weight:600; 
+      font-size:0.8rem;
+      color:#1e293b; 
+    }
+    
     /* Service control buttons */
     .service-controls { display:flex; gap:4px; flex-wrap:wrap; }
     .btn-sm { padding:3px 8px; font-size:0.7rem; border:none; border-radius:3px; cursor:pointer; color:#fff; transition:opacity 0.2s; }
@@ -221,6 +418,7 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
     @media (max-width: 920px) { .layout { flex-direction:column; } .sidebar { width:100%; flex-direction:row; flex-wrap:wrap; } .service-list { display:flex; flex-wrap:wrap; gap:8px; } .service-list li { margin:0; } }
   </style>
   <script>
+    console.log('🔧 Admin dashboard script loaded');
     var REFRESH_MS = ${refreshInterval};
     var nextRefreshLabel;
     
@@ -513,6 +711,7 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
       scheduleCountdown();
       setTimeout(fetchStatus, REFRESH_MS); // initial schedule
       initializeLogs();
+      initializeMetrics();
       
       // Event delegation for service control buttons
       document.addEventListener('click', function(event) {
@@ -563,7 +762,20 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
       wsConnection = new WebSocket(wsUrl);
       
       wsConnection.onopen = function() {
-        console.log('WebSocket connected');
+        console.log('📊 WebSocket connected successfully');
+        console.log('📊 selectedService value:', selectedService);
+        // Start metrics stream when connection opens
+        try {
+          const message = {
+            type: 'start_metrics_stream',
+            service: selectedService
+          };
+          console.log('📊 Sending message:', JSON.stringify(message));
+          wsConnection.send(JSON.stringify(message));
+          console.log('📊 Message sent successfully');
+        } catch (error) {
+          console.error('📊 Error sending start_metrics_stream:', error);
+        }
       };
       
       wsConnection.onmessage = function(event) {
@@ -603,6 +815,29 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
         renderLogs(applyClientFilters(allLogsCache));
       } else if (data.type === 'error') {
         renderLogsError(data.message);
+      } else if (data.type === 'metrics_data') {
+        console.log('📊 Received initial metrics_data:', data);
+        console.log('📊 Services in metrics_data:', data.services?.length || 0);
+        updateMetricsCharts(data);
+        // Request historical data to fill charts
+        if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+          wsConnection.send(JSON.stringify({
+            type: 'get_metrics_history',
+            service: selectedService === 'all' ? null : selectedService,
+            limit: 50
+          }));
+        }
+      } else if (data.type === 'metrics_update') {
+        console.log('📊 Received metrics_update:', data);
+        console.log('📊 Services in metrics_update:', data.services?.length || 0);
+        updateMetricsCharts(data);
+      } else if (data.type === 'metrics_history') {
+        console.log('📊 Received metrics_history with', data.history?.length || 0, 'entries');
+        console.log('📊 First history entry:', data.history?.[0]);
+        if (data.history && Array.isArray(data.history)) {
+          const historyData = { services: data.history };
+          populateChartsWithHistory(historyData);
+        }
       }
     }
     
@@ -762,6 +997,320 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
         }, 300);
       }, 3000);
     }
+    
+    // Metrics functionality
+    let metricsCharts = {};
+    let metricsWebSocket = null;
+    let metricsData = {};
+    let selectedService = 'all';
+    let selectedTimeRange = '1h';
+    
+    function initializeMetrics() {
+      console.log('📊 Initializing metrics...');
+      const serviceFilter = document.getElementById('metrics-service-filter');
+      const timeRangeFilter = document.getElementById('metrics-time-range');
+      const refreshBtn = document.getElementById('metrics-refresh');
+      
+      console.log('📊 Found elements:', { serviceFilter: !!serviceFilter, timeRangeFilter: !!timeRangeFilter, refreshBtn: !!refreshBtn });
+      
+      serviceFilter?.addEventListener('change', updateMetricsFilter);
+      timeRangeFilter?.addEventListener('change', updateMetricsFilter);
+      refreshBtn?.addEventListener('click', refreshMetrics);
+      
+      initializeCharts();
+      startMetricsStream();
+    }
+    
+    function initializeCharts() {
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 },
+        scales: {
+          x: { 
+            display: true,
+            type: 'time',
+            time: { unit: 'minute' }
+          },
+          y: { 
+            display: true,
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      };
+      
+      // CPU Chart
+      const cpuCtx = document.getElementById('cpu-chart');
+      if (cpuCtx) {
+        metricsCharts.cpu = new Chart(cpuCtx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'CPU %',
+              data: [],
+              borderColor: '#0d9488',
+              backgroundColor: 'rgba(13, 148, 136, 0.1)',
+              tension: 0.4
+            }]
+          },
+          options: { ...chartOptions, scales: { ...chartOptions.scales, y: { ...chartOptions.scales.y, max: 100 } } }
+        });
+      }
+      
+      // Memory Chart
+      const memoryCtx = document.getElementById('memory-chart');
+      if (memoryCtx) {
+        metricsCharts.memory = new Chart(memoryCtx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'Memory %',
+              data: [],
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.4
+            }]
+          },
+          options: { ...chartOptions, scales: { ...chartOptions.scales, y: { ...chartOptions.scales.y, max: 100 } } }
+        });
+      }
+      
+      // Network Chart
+      const networkCtx = document.getElementById('network-chart');
+      if (networkCtx) {
+        metricsCharts.network = new Chart(networkCtx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'RX (bytes/s)',
+              data: [],
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.4
+            }, {
+              label: 'TX (bytes/s)',
+              data: [],
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              tension: 0.4
+            }]
+          },
+          options: chartOptions
+        });
+      }
+    }
+    
+    function startMetricsStream() {
+      console.log('📊 Starting metrics stream...');
+      if (!wsConnection) {
+        console.log('📊 No wsConnection, initializing...');
+        initWebSocket();
+      }
+      
+      console.log('📊 wsConnection state:', wsConnection?.readyState);
+      if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+        console.log('📊 Sending start_metrics_stream message, service:', selectedService);
+        wsConnection.send(JSON.stringify({
+          type: 'start_metrics_stream',
+          service: selectedService
+        }));
+      } else {
+        console.log('📊 WebSocket not ready, will send when connected');
+      }
+    }
+    
+    function updateMetricsFilter() {
+      const serviceFilter = document.getElementById('metrics-service-filter');
+      const timeRangeFilter = document.getElementById('metrics-time-range');
+      
+      selectedService = serviceFilter?.value || 'all';
+      selectedTimeRange = timeRangeFilter?.value || '1h';
+      
+      startMetricsStream();
+    }
+    
+    function refreshMetrics() {
+      if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+        wsConnection.send(JSON.stringify({
+          type: 'get_metrics_history',
+          service: selectedService === 'all' ? null : selectedService,
+          limit: 100
+        }));
+      }
+    }
+    
+    function updateMetricsCharts(data) {
+      console.log('📊 updateMetricsCharts called with:', data);
+      if (!data || !data.services) {
+        console.log('📊 No data.services, returning');
+        return;
+      }
+      
+      const now = new Date();
+      const timeLimit = getTimeLimitFromRange(selectedTimeRange);
+      
+      console.log('📊 Processing', data.services.length, 'services');
+      data.services.forEach((serviceMetrics, index) => {
+        console.log('📊 Service ' + index + ':', serviceMetrics);
+        if (selectedService !== 'all' && serviceMetrics.serviceName !== selectedService) {
+          console.log('📊 Skipping service due to filter:', serviceMetrics.serviceName);
+          return;
+        }
+        
+        const timestamp = new Date(serviceMetrics.timestamp);
+        if (timestamp < timeLimit) {
+          console.log('📊 Skipping old timestamp:', timestamp);
+          return;
+        }
+        
+        console.log('📊 Adding data point:', {
+          cpu: serviceMetrics.cpu?.usage,
+          memory: serviceMetrics.memory?.percentage,
+          timestamp: timestamp.toISOString()
+        });
+        
+        updateChart('cpu', timestamp, serviceMetrics.cpu?.usage || 0);
+        updateChart('memory', timestamp, serviceMetrics.memory?.percentage || 0);
+        updateNetworkChart(timestamp, serviceMetrics.network || { rx: 0, tx: 0 });
+        
+        updateMetricsStats(serviceMetrics);
+      });
+    }
+
+    function updateChart(type, timestamp, value) {
+      const chart = metricsCharts[type];
+      if (!chart) return;
+      
+      chart.data.labels.push(timestamp);
+      chart.data.datasets[0].data.push(value);
+      
+      // Keep only last 50 data points
+      if (chart.data.labels.length > 50) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      
+      chart.update('none');
+    }
+
+    function populateChartsWithHistory(data) {
+      if (!data || !data.services) return;
+      
+      // Clear existing chart data
+      Object.values(metricsCharts).forEach(chart => {
+        if (chart) {
+          chart.data.labels = [];
+          chart.data.datasets.forEach(dataset => {
+            dataset.data = [];
+          });
+        }
+      });
+      
+      // Add historical data points
+      data.services.forEach(serviceMetrics => {
+        if (selectedService !== 'all' && serviceMetrics.serviceName !== selectedService) {
+          return;
+        }
+        
+        const timestamp = new Date(serviceMetrics.timestamp);
+        
+        // Add data point to charts
+        addChartDataPoint('cpu', timestamp, serviceMetrics.cpu.usage);
+        addChartDataPoint('memory', timestamp, serviceMetrics.memory.percentage);
+        addNetworkDataPoint(timestamp, serviceMetrics.network);
+        
+        updateMetricsStats(serviceMetrics);
+      });
+      
+      // Update all charts at once
+      Object.values(metricsCharts).forEach(chart => {
+        if (chart) chart.update('none');
+      });
+    }
+
+    function addChartDataPoint(type, timestamp, value) {
+      const chart = metricsCharts[type];
+      if (!chart) return;
+      
+      chart.data.labels.push(timestamp);
+      chart.data.datasets[0].data.push(value);
+    }
+
+    function addNetworkDataPoint(timestamp, networkData) {
+      const chart = metricsCharts.network;
+      if (!chart) return;
+      
+      chart.data.labels.push(timestamp);
+      chart.data.datasets[0].data.push(networkData.rx || 0);
+      chart.data.datasets[1].data.push(networkData.tx || 0);
+    }
+    
+    function updateNetworkChart(timestamp, networkData) {
+      const chart = metricsCharts.network;
+      if (!chart) return;
+      
+      chart.data.labels.push(timestamp);
+      chart.data.datasets[0].data.push(networkData.rx);
+      chart.data.datasets[1].data.push(networkData.tx);
+      
+      // Keep only last 50 data points
+      if (chart.data.labels.length > 50) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
+      }
+      
+      chart.update('none');
+    }
+    
+    function updateMetricsStats(serviceMetrics) {
+      // Update CPU stats
+      const cpuStats = document.getElementById('cpu-stats');
+      if (cpuStats) {
+        const current = cpuStats.querySelector('.current-value');
+        if (current) current.textContent = serviceMetrics.cpu.usage.toFixed(1) + '%';
+      }
+      
+      // Update Memory stats
+      const memoryStats = document.getElementById('memory-stats');
+      if (memoryStats) {
+        const current = memoryStats.querySelector('.current-value');
+        if (current) current.textContent = serviceMetrics.memory.percentage.toFixed(1) + '%';
+      }
+      
+      // Update Network stats
+      const networkStats = document.getElementById('network-stats');
+      if (networkStats) {
+        const rxValue = networkStats.querySelector('.rx-value');
+        const txValue = networkStats.querySelector('.tx-value');
+        if (rxValue) rxValue.textContent = formatBytes(serviceMetrics.network.rx) + '/s';
+        if (txValue) txValue.textContent = formatBytes(serviceMetrics.network.tx) + '/s';
+      }
+    }
+    
+    function getTimeLimitFromRange(range) {
+      const now = new Date();
+      switch (range) {
+        case '1h': return new Date(now - 60 * 60 * 1000);
+        case '6h': return new Date(now - 6 * 60 * 60 * 1000);
+        case '24h': return new Date(now - 24 * 60 * 60 * 1000);
+        default: return new Date(now - 60 * 60 * 1000);
+      }
+    }
+    
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
   </script>
 </head>
 <body>
@@ -843,6 +1392,78 @@ function generateDashboardHTML(servicesWithStatus, refreshInterval = 5000) {
         </tbody>
       </table>`}
       
+      <!-- Resource Monitoring Section -->
+      <div class="metrics-section">
+        <div class="metrics-header">
+          <h2 style="font-size:1rem; font-weight:600; color:#334155; margin:0;">Resource Monitoring</h2>
+          <div class="metrics-controls">
+            <select id="metrics-service-filter">
+              <option value="all">All Services</option>
+              ${servicesWithStatus.map(s => `<option value="${s.name}">${s.name}</option>`).join('')}
+            </select>
+            <select id="metrics-time-range">
+              <option value="1h">Last Hour</option>
+              <option value="6h">Last 6 Hours</option>
+              <option value="24h">Last 24 Hours</option>
+            </select>
+            <button id="metrics-refresh" class="secondary">Refresh</button>
+          </div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-card cpu-card">
+            <div class="metric-header">
+              <h3>CPU Usage</h3>
+              <span class="metric-icon">⚡</span>
+            </div>
+            <canvas id="cpu-chart" width="300" height="150"></canvas>
+            <div id="cpu-stats" class="metric-stats">
+              <div class="stat-item">
+                <span class="stat-label">Current</span>
+                <span class="current-value">--</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Average</span>
+                <span class="avg-value">--</span>
+              </div>
+            </div>
+          </div>
+          <div class="metric-card memory-card">
+            <div class="metric-header">
+              <h3>Memory Usage</h3>
+              <span class="metric-icon">🧠</span>
+            </div>
+            <canvas id="memory-chart" width="300" height="150"></canvas>
+            <div id="memory-stats" class="metric-stats">
+              <div class="stat-item">
+                <span class="stat-label">Current</span>
+                <span class="current-value">--</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Average</span>
+                <span class="avg-value">--</span>
+              </div>
+            </div>
+          </div>
+          <div class="metric-card network-card">
+            <div class="metric-header">
+              <h3>Network I/O</h3>
+              <span class="metric-icon">🌐</span>
+            </div>
+            <canvas id="network-chart" width="300" height="150"></canvas>
+            <div id="network-stats" class="metric-stats">
+              <div class="stat-item">
+                <span class="stat-label">Received</span>
+                <span class="rx-value">--</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Transmitted</span>
+                <span class="tx-value">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <!-- Logs Section -->
       <div class="logs-section">
         <div class="logs-header">
@@ -915,6 +1536,22 @@ export async function startAdminDashboard(options = {}) {
     console.log(chalk.gray('   Logs will be read from files on demand'));
   }
   
+  // Initialize resource monitor
+  console.log('🔧 Initializing resource monitor...');
+  globalResourceMonitor = getResourceMonitor({ 
+    collectInterval: 5000, 
+    maxHistorySize: 720 
+  });
+  try {
+    console.log('🔧 Calling globalResourceMonitor.initialize()...');
+    await globalResourceMonitor.initialize();
+    console.log(chalk.green('✅ Resource monitor initialized'));
+  } catch (error) {
+    console.warn(chalk.yellow('⚠️  Failed to initialize resource monitor:', error.message));
+    console.log(chalk.gray('   Resource metrics will not be available'));
+    console.error('Resource monitor error:', error);
+  }
+  
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://localhost:${port}`);
     
@@ -963,6 +1600,44 @@ export async function startAdminDashboard(options = {}) {
         res.end(JSON.stringify(logs, null, 2));
       } catch (e) {
         console.error('❌ Logs API error:', e.message);
+        res.writeHead(500, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+    
+    if (url.pathname === '/api/metrics') {
+      // API endpoint for resource metrics
+      try {
+        const serviceName = url.searchParams.get('service');
+        const since = url.searchParams.get('since');
+        const limit = url.searchParams.get('limit') || '100';
+        
+        let metrics = {};
+        if (globalResourceMonitor) {
+          if (serviceName) {
+            metrics = globalResourceMonitor.getMetricsHistory(serviceName, {
+              since,
+              limit: parseInt(limit)
+            });
+          } else {
+            metrics = globalResourceMonitor.getCurrentMetrics();
+          }
+        }
+        
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({
+          metrics,
+          systemInfo: globalResourceMonitor?.getSystemInfo() || null
+        }, null, 2));
+      } catch (e) {
+        console.error('❌ Metrics API error:', e.message);
         res.writeHead(500, {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*'
@@ -1085,6 +1760,49 @@ export async function startAdminDashboard(options = {}) {
       options,
       services: cfg.services
     });
+
+    // Start resource monitoring if available
+    if (globalResourceMonitor) {
+      console.log('🔧 Starting resource monitoring...');
+      // Start with initial services (PIDs might be null initially)
+      const servicesWithPids = cfg.services.map(service => {
+        const status = getServiceStatus(service.name);
+        console.log(`🔧 Service ${service.name}: status=${status.status}, pid=${status.pid}`);
+        return { ...service, pid: status.pid };
+      });
+      
+      console.log(`🔧 Starting resource monitor with ${servicesWithPids.length} services`);
+      globalResourceMonitor.startCollecting(servicesWithPids).catch(console.error);
+      
+      // Set up event listener for metrics updates
+      globalResourceMonitor.on('metricsUpdate', (data) => {
+        console.log(`📊 Received metricsUpdate for ${data.services?.length || 0} services`);
+        broadcastMetricsEvent('metricsUpdate', data);
+      });
+      
+      // Update service PIDs periodically as services start up
+      const updateServicePids = async () => {
+        const updatedServicesWithPids = cfg.services.map(service => {
+          const status = getServiceStatus(service.name);
+          return { ...service, pid: status.pid };
+        });
+        
+        // Always update services to let resource monitor detect PIDs
+        try {
+          await globalResourceMonitor.updateServices(updatedServicesWithPids);
+          // Update the stored services
+          servicesWithPids.length = 0;
+          servicesWithPids.push(...updatedServicesWithPids);
+        } catch (error) {
+          console.error('Error updating service PIDs:', error.message);
+        }
+      };
+      
+      // Check for PID updates every 10 seconds
+      setInterval(updateServicePids, 10000);
+      
+      console.log(chalk.green('📊 Resource monitoring started'));
+    }
     
     // Auto-open browser if requested
     if (options.open !== false) {
@@ -1115,7 +1833,9 @@ export async function startAdminDashboard(options = {}) {
   }, 30000);
 
   wsServer.on('connection', (ws) => {
+    console.log('🔧 New WebSocket connection established');
     ws.serviceFilter = null; // default: all services
+    ws.metricsFilter = null; // default: no metrics filter yet
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
     ws.on('message', (raw) => {
@@ -1130,6 +1850,11 @@ export async function startAdminDashboard(options = {}) {
     setTimeout(() => {
       if (!ws.serviceFilter && ws.readyState === WebSocket.OPEN) {
         handleWebSocketMessage(ws, { type: 'start_log_stream' });
+      }
+      // Also auto-start metrics stream
+      if (!ws.metricsFilter && ws.readyState === WebSocket.OPEN) {
+        console.log('🔧 Auto-starting metrics stream for new connection');
+        handleWebSocketMessage(ws, { type: 'start_metrics_stream', service: 'all' });
       }
     }, 250);
   });
@@ -1149,6 +1874,16 @@ export async function startAdminDashboard(options = {}) {
         console.warn(chalk.yellow('⚠️  Error stopping log watcher:'), e.message);
       }
       globalLogWatcher = null;
+    }
+    
+    // Stop resource monitor if active
+    if (globalResourceMonitor) {
+      try {
+        globalResourceMonitor.stopCollecting();
+      } catch (e) {
+        console.warn(chalk.yellow('⚠️  Error stopping resource monitor:'), e.message);
+      }
+      globalResourceMonitor = null;
     }
 
     if (wsServer) {

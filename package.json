@@ -56,7 +56,9 @@
     "fs-extra": "^11.3.2",
     "hookable": "^5.5.3",
     "lodash": "^4.17.21",
+    "pidusage": "^3.0.2",
     "prompts": "^2.4.2",
+    "systeminformation": "^5.23.5",
     "ws": "^8.16.0"
   },
   "devDependencies": {

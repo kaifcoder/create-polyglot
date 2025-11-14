@@ -367,3 +367,17 @@ export async function installServiceDependencies(service, serviceDir) {
       return { success: true };
   }
 }
+
+// Helper functions for registering externally started processes
+export function registerRunningProcess(serviceName, process, serviceConfig) {
+  runningProcesses.set(serviceName, {
+    process,
+    service: serviceConfig,
+    startTime: new Date(),
+    status: 'running'
+  });
+}
+
+export function unregisterRunningProcess(serviceName) {
+  runningProcesses.delete(serviceName);
+}
