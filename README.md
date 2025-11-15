@@ -167,6 +167,8 @@ create-polyglot dev --docker
 | `create-polyglot init <name>` | Scaffold a new workspace (root invocation without `init` is deprecated). |
 | `create-polyglot add service <name>` | Add a service after init (`--type`, `--port`, `--yes`). |
 | `create-polyglot add plugin <name>` | Create plugin skeleton under `plugins/<name>`. |
+| `create-polyglot remove service <name>` | Remove a service from the workspace (`--keep-files`, `--yes`). |
+| `create-polyglot remove plugin <name>` | Remove a plugin from the workspace (`--keep-files`, `--yes`). |
 | `create-polyglot dev [--docker]` | Run Node & frontend services locally or all via compose. |
 
 ## Init Options
@@ -226,6 +228,50 @@ my-org/
 3. Run `create-polyglot dev` (local) or `create-polyglot dev --docker`.
 4. Edit services under `services/<name>`.
 5. Extend infra / databases inside `compose.yaml`.
+
+## Managing Services & Plugins
+
+### Adding Components
+Add services after initial scaffolding:
+```bash
+create-polyglot add service payments --type node --port 4100
+create-polyglot add plugin analytics
+```
+
+### Removing Components
+Clean removal of services and plugins:
+```bash
+# Remove a service (including files and configuration)
+create-polyglot remove service payments --yes
+
+# Remove a plugin  
+create-polyglot remove plugin analytics --yes
+
+# Keep files but remove from configuration
+create-polyglot remove service payments --keep-files --yes
+```
+
+The remove commands:
+- **Remove from configuration**: Updates `polyglot.json`, `compose.yaml`, and root `package.json` scripts
+- **Clean up files**: Removes service/plugin directories unless `--keep-files` is specified  
+- **Update dependencies**: Cleans up related logs and docker configurations
+- **Interactive confirmation**: Prompts for confirmation unless `--yes` is used
+- **Plugin management**: Also available via `create-polyglot plugin remove <name>`
+
+### Service Removal Details
+When removing a service:
+- Service entry removed from `polyglot.json`
+- Service definition removed from `compose.yaml`
+- Service directory deleted from `services/<name>` (unless `--keep-files`)
+- Related scripts removed from root `package.json`
+- Log files cleaned up
+
+### Plugin Removal Details
+When removing a plugin:
+- Plugin configuration removed from `polyglot.json`
+- Plugin directory deleted from `plugins/<name>` (unless `--keep-files`)
+- Plugin unloaded from the plugin system
+- External plugin references removed
 
 ### Basic Dev Runner
 When no preset is chosen, `npm run dev` uses `npx create-polyglot dev`:
@@ -291,7 +337,6 @@ Generates ESLint + Prettier base configs at the root. Extend rules per service i
 - Automatic test harness & CI workflow template
 - Language-specific shared libs (Python package, Go module)
 - Hot reload integration aggregator
-- Remove service / remove plugin commands
 
 ## Contributing
 Contributions welcome! See `CONTRIBUTING.md` for guidelines. Please run tests before submitting a PR:
@@ -466,6 +511,22 @@ Pass `--git` to automatically run `git init`, create an initial commit, and (if 
 ### Lint & Format
 Generates ESLint + Prettier base configs at the root. Extend rules per service if needed.
 
+### Release Notes Automation
+
+This project uses an automated release notes generation system that:
+
+- **Automatically categorizes commits** by type (features, bug fixes, breaking changes, etc.)
+- **Generates structured release notes** when new versions are published
+- **Provides templates** for consistent release documentation
+- **Integrates with the CI/CD pipeline** for seamless releases
+
+Contributors can help improve release notes by:
+- Using [Conventional Commits](https://www.conventionalcommits.org/) format
+- Filling out PR templates with appropriate categorization
+- Including clear descriptions of user-facing changes
+
+See [`docs/automated-release-notes.md`](docs/automated-release-notes.md) for detailed documentation.
+
 ### Roadmap / Ideas
 - Plugin hook execution pipeline
 - Healthchecks and depends_on in `compose.yaml`
@@ -473,7 +534,6 @@ Generates ESLint + Prettier base configs at the root. Extend rules per service i
 - Automatic test harness & CI workflow template
 - Language-specific shared libs (Python package, Go module)
 - Hot reload integration aggregator
-- Remove service / remove plugin commands
 
 ## License
 MIT

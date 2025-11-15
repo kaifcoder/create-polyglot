@@ -29,7 +29,8 @@ export default defineConfig({
         { text: 'Extending (New Service)', link: '/guide/extending-service' },
         { text: 'Service Logs', link: '/logs-feature' },
         { text: 'Plugin System', link: '/plugin-system' },
-        { text: 'Service Controls', link: '/service-controls-feature' }
+        { text: 'Service Controls', link: '/service-controls-feature' },
+        { text: 'Automated Release Notes', link: '/automated-release-notes' }
       ],
       '/cli/': [
         { text: 'Usage', link: '/cli/' },

@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
  
-import { scaffoldMonorepo, addService, scaffoldPlugin } from './lib/scaffold.js';
+import { scaffoldMonorepo, addService, scaffoldPlugin, removeService, removePlugin } from './lib/scaffold.js';
 import fs from 'fs';
 import path from 'path';
 import { renderServicesTable } from './lib/ui.js';
@@ -90,11 +90,35 @@ program
       } else if (entity === 'plugin') {
         await scaffoldPlugin(projectDir, name);
       } else {
-        console.log(chalk.red(`Unknown entity '${entity}'. Use service or plugin.`));
+        console.error(chalk.red(`Unknown entity '${entity}'. Use service or plugin.`));
         process.exit(1);
       }
     } catch (e) {
       console.error(chalk.red('Failed to add:'), e.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('remove')
+  .description('Remove a service or plugin')
+  .argument('<entity>', 'service | plugin')
+  .argument('<name>', 'Name of the service or plugin')
+  .option('--keep-files', 'Keep service files, only remove from configuration')
+  .option('--yes', 'Skip confirmation prompt')
+  .action(async (entity, name, opts) => {
+    const projectDir = process.cwd();
+    try {
+      if (entity === 'service') {
+        await removeService(projectDir, name, opts);
+      } else if (entity === 'plugin') {
+        await removePlugin(projectDir, name, opts);
+      } else {
+        console.error(chalk.red(`Unknown entity '${entity}'. Use service or plugin.`));
+        process.exit(1);
+      }
+    } catch (e) {
+      console.error(chalk.red('Failed to remove:'), e.message);
       process.exit(1);
     }
   });
@@ -403,6 +427,23 @@ pluginCmd
       console.log('New configuration:', JSON.stringify(config, null, 2));
     } catch (e) {
       console.error(chalk.red('Failed to configure plugin:'), e.message);
+      process.exit(1);
+    }
+  });
+
+pluginCmd
+  .command('remove')
+  .description('Remove a plugin')
+  .argument('<name>', 'Plugin name')
+  .option('--keep-files', 'Keep plugin files, only remove from configuration')
+  .option('--yes', 'Skip confirmation prompt')
+  .action(async (name, opts) => {
+    try {
+      const { removePlugin } = await import('./lib/scaffold.js');
+      const cwd = process.cwd();
+      await removePlugin(cwd, name, opts);
+    } catch (e) {
+      console.error(chalk.red('Failed to remove plugin:'), e.message);
       process.exit(1);
     }
   });

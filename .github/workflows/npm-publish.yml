@@ -8,6 +8,33 @@ on:
     types: [created]
 
 jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Trigger release notes generation
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Trigger the release notes workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release-notes.yml',
+              ref: 'main',
+              inputs: {
+                tag_name: '${{ github.event.release.tag_name }}',
+                target_commitish: '${{ github.event.release.target_commitish }}'
+              }
+            });
+            console.log('Release notes generation triggered');
+            
+            // Wait a bit for the workflow to complete
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -22,7 +49,7 @@ jobs:
       - run: npm test
 
   publish-npm:
-    needs: build
+    needs: [generate-release-notes, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

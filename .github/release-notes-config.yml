@@ -1,0 +1,165 @@
+# Release Notes Configuration
+
+# This file contains configuration for the automated release notes generation system.
+# It defines how commits are categorized and what patterns to look for.
+
+# Commit categorization patterns (regex patterns, case-insensitive)
+categorization:
+  features:
+    patterns:
+      - "^feat(\\(.*\\))?:"
+      - "^add "
+      - "^implement "
+      - "new feature"
+      - "added support"
+    
+  bugfixes:
+    patterns:
+      - "^fix(\\(.*\\))?:"
+      - "^bug "
+      - "^patch "
+      - "resolve.*issue"
+      - "fixed.*problem"
+    
+  breaking_changes:
+    patterns:
+      - "^feat(\\(.*\\))?!:"
+      - "^fix(\\(.*\\))?!:"
+      - "breaking"
+      - "^BREAKING CHANGE"
+      - "backwards incompatible"
+    
+  documentation:
+    patterns:
+      - "^docs(\\(.*\\))?:"
+      - "documentation"
+      - "readme"
+      - "update.*docs"
+      - "add.*docs"
+    
+  internal:
+    patterns:
+      - "^chore(\\(.*\\))?:"
+      - "^ci(\\(.*\\))?:"
+      - "^test(\\(.*\\))?:"
+      - "^refactor(\\(.*\\))?:"
+      - "^build(\\(.*\\))?:"
+      - "^perf(\\(.*\\))?:"
+      - "internal changes"
+      - "code cleanup"
+    
+  dependencies:
+    patterns:
+      - "^deps(\\(.*\\))?:"
+      - "dependencies"
+      - "package.*update"
+      - "bump.*version"
+      - "upgrade.*to"
+      - "update.*dependency"
+
+# Section configuration
+sections:
+  features:
+    title: "🚀 Features Added"
+    description: "New functionality and capabilities added in this release"
+    
+  bugfixes:
+    title: "🐛 Bug Fixes"
+    description: "Issues and problems resolved in this release"
+    
+  breaking_changes:
+    title: "⚠️ Breaking Changes" 
+    description: "Changes that may break backward compatibility"
+    priority: 1  # Show first after main description
+    
+  documentation:
+    title: "📚 Documentation"
+    description: "Documentation updates and improvements"
+    
+  internal:
+    title: "🔧 Internal/DevOps"
+    description: "Internal improvements, build system, and development tooling changes"
+    
+  dependencies:
+    title: "📦 Dependencies"
+    description: "Dependency updates and package management changes"
+    
+  other:
+    title: "🎉 Other Changes"
+    description: "Other notable changes that don't fit the above categories"
+    
+  refactoring:
+    title: "🔄 Refactoring & Performance"
+    description: "Code quality improvements and performance optimizations"
+
+# Template configuration
+template:
+  # Whether to include sections that have no items
+  include_empty_sections: false
+  
+  # Maximum number of commits to show per section (0 = unlimited)
+  max_commits_per_section: 0
+  
+  # Whether to include commit hashes in the output
+  include_commit_hashes: true
+  
+  # Whether to include author information
+  include_authors: true
+  
+  # Date format for the release
+  date_format: "YYYY-MM-DD"
+
+# Contributors configuration  
+contributors:
+  # Whether to include a contributors section
+  include_contributors: true
+  
+  # How to format contributor names
+  format: "@{username}"
+  
+  # Whether to exclude bot accounts
+  exclude_bots: true
+  
+  # List of usernames to exclude from contributors list
+  exclude_users:
+    - "dependabot[bot]"
+    - "github-actions[bot]"
+
+# Validation rules
+validation:
+  # Minimum number of commits required for a release
+  min_commits: 1
+  
+  # Whether to fail if no categorized changes are found
+  require_categorized_changes: false
+  
+  # Whether to validate that breaking changes have migration notes
+  require_breaking_change_notes: true
+
+# Custom replacements for commit messages (useful for cleaning up automated commits)
+message_replacements:
+  - pattern: "^Merge pull request #\\d+ from .*"
+    replacement: ""  # Remove merge commit messages
+  - pattern: "^Merge branch '.*' into .*"
+    replacement: ""  # Remove branch merge messages
+  - pattern: "\\(#(\\d+)\\)"
+    replacement: "(#$1)"  # Normalize PR references
+
+# Integration settings
+integrations:
+  github:
+    # Whether to link to GitHub commits
+    link_commits: true
+    
+    # Whether to link to GitHub issues/PRs
+    link_issues: true
+    
+    # Base URL for the repository
+    base_url: "https://github.com/{owner}/{repo}"
+  
+  npm:
+    # Whether to include npm installation instructions
+    include_install_instructions: true
+    
+    # Package name for installation instructions
+    package_name: "create-polyglot"

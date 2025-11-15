@@ -128,25 +128,35 @@ class PluginSystem {
   }
 
   /**
-   * Discover local plugins in the .polyglot/plugins directory
+   * Discover local plugins in both .polyglot/plugins and plugins directories
    */
   async discoverLocalPlugins() {
-    const pluginsDir = path.join(this.projectDir, '.polyglot', 'plugins');
     const localPlugins = [];
+    
+    // Check both .polyglot/plugins and plugins directories for backward compatibility
+    const pluginDirs = [
+      path.join(this.projectDir, '.polyglot', 'plugins'),
+      path.join(this.projectDir, 'plugins')
+    ];
 
-    if (await fs.pathExists(pluginsDir)) {
-      const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
-      
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const pluginPath = path.join(pluginsDir, entry.name, 'index.js');
-          if (await fs.pathExists(pluginPath)) {
-            localPlugins.push({
-              name: entry.name,
-              type: 'local',
-              path: pluginPath,
-              enabled: this.config?.plugins?.[entry.name]?.enabled !== false
-            });
+    for (const pluginsDir of pluginDirs) {
+      if (await fs.pathExists(pluginsDir)) {
+        const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const pluginPath = path.join(pluginsDir, entry.name, 'index.js');
+            if (await fs.pathExists(pluginPath)) {
+              // Only add if not already added from another directory
+              if (!localPlugins.find(p => p.name === entry.name)) {
+                localPlugins.push({
+                  name: entry.name,
+                  type: 'local',
+                  path: pluginPath,
+                  enabled: this.config?.plugins?.[entry.name]?.enabled !== false
+                });
+              }
+            }
           }
         }
       }

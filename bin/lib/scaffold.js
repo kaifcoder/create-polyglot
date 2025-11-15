@@ -1013,3 +1013,265 @@ Each hook receives a context object with relevant information:
   
   console.log(chalk.green(`✅ Created plugin scaffold '${pluginName}' with comprehensive examples`));
 }
+
+// Service removal logic
+export async function removeService(projectDir, serviceName, options = {}) {
+  const configPath = path.join(projectDir, 'polyglot.json');
+  if (!(await fs.pathExists(configPath))) {
+    throw new Error('polyglot.json not found. Are you in a create-polyglot project?');
+  }
+
+  // Initialize plugins for this project if not already done
+  await initializePlugins(projectDir);
+
+  // Load current configuration
+  const cfg = await fs.readJSON(configPath);
+  const service = cfg.services.find(s => s.name === serviceName);
+  
+  if (!service) {
+    throw new Error(`Service '${serviceName}' not found.`);
+  }
+
+  // Call before:service:remove hook
+  await callHook('before:service:remove', {
+    projectDir,
+    service,
+    options
+  });
+
+  // Confirmation prompt unless --yes is used
+  if (!options.yes) {
+    const prompts = (await import('prompts')).default;
+    const confirmRemoval = await prompts({
+      type: 'confirm',
+      name: 'confirmed',
+      message: `Are you sure you want to remove service '${serviceName}' (${service.type})?`,
+      initial: false
+    });
+
+    if (!confirmRemoval.confirmed) {
+      console.log(chalk.yellow('Service removal cancelled.'));
+      return;
+    }
+  }
+
+  // Remove service from configuration
+  cfg.services = cfg.services.filter(s => s.name !== serviceName);
+  await fs.writeJSON(configPath, cfg, { spaces: 2 });
+
+  // Remove service files unless --keep-files is used
+  if (!options.keepFiles) {
+    const servicePath = path.join(projectDir, 'services', serviceName);
+    if (await fs.pathExists(servicePath)) {
+      await fs.remove(servicePath);
+      console.log(chalk.blue(`🗑️  Removed service files from services/${serviceName}`));
+    }
+
+    // Also check legacy apps/ directory
+    const legacyServicePath = path.join(projectDir, 'apps', serviceName);
+    if (await fs.pathExists(legacyServicePath)) {
+      await fs.remove(legacyServicePath);
+      console.log(chalk.blue(`🗑️  Removed service files from apps/${serviceName}`));
+    }
+
+    // Clean up logs
+    const logsPath = path.join(projectDir, '.logs');
+    if (await fs.pathExists(logsPath)) {
+      const serviceLogFiles = await fs.readdir(logsPath);
+      for (const logFile of serviceLogFiles) {
+        if (logFile.includes(serviceName)) {
+          await fs.remove(path.join(logsPath, logFile));
+        }
+      }
+    }
+  } else {
+    console.log(chalk.yellow(`📁 Service files kept (--keep-files option)`));
+  }
+
+  // Update compose.yaml if it exists
+  const composePath = path.join(projectDir, 'compose.yaml');
+  if (await fs.pathExists(composePath)) {
+    try {
+      let composeContent = await fs.readFile(composePath, 'utf-8');
+      
+      // Remove service section from compose.yaml - more precise regex
+      const lines = composeContent.split('\n');
+      const result = [];
+      let inTargetService = false;
+      let serviceIndentLevel = -1;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        // Check if this line starts our target service
+        if (trimmed === `${serviceName}:`) {
+          inTargetService = true;
+          serviceIndentLevel = line.length - line.trimStart().length;
+          continue; // Skip the service name line
+        }
+        
+        // If we're in the target service, check if we've reached the end
+        if (inTargetService) {
+          const currentIndentLevel = line.length - line.trimStart().length;
+          
+          // If we hit another service at the same level or a section, we're done
+          if (trimmed && (currentIndentLevel <= serviceIndentLevel || 
+                         (currentIndentLevel === 0 && trimmed.endsWith(':')))) {
+            inTargetService = false;
+            serviceIndentLevel = -1;
+            result.push(line); // Include this line as it's not part of our service
+          }
+          // Otherwise skip lines that are part of our target service
+        } else {
+          result.push(line);
+        }
+      }
+      
+      await fs.writeFile(composePath, result.join('\n'));
+      console.log(chalk.blue(`🐳 Updated compose.yaml`));
+    } catch (e) {
+      console.warn(chalk.yellow(`⚠️  Could not update compose.yaml: ${e.message}`));
+    }
+  }
+
+  // Update root package.json scripts if needed
+  const rootPackageJsonPath = path.join(projectDir, 'package.json');
+  if (await fs.pathExists(rootPackageJsonPath)) {
+    try {
+      const rootPackageJson = await fs.readJSON(rootPackageJsonPath);
+      if (rootPackageJson.scripts) {
+        // Remove service-specific scripts
+        Object.keys(rootPackageJson.scripts).forEach(scriptName => {
+          if (scriptName.includes(serviceName)) {
+            delete rootPackageJson.scripts[scriptName];
+          }
+        });
+        
+        await fs.writeJSON(rootPackageJsonPath, rootPackageJson, { spaces: 2 });
+        console.log(chalk.blue(`📦 Updated root package.json scripts`));
+      }
+    } catch (e) {
+      console.warn(chalk.yellow(`⚠️  Could not update package.json: ${e.message}`));
+    }
+  }
+
+  // Call after:service:remove hook
+  await callHook('after:service:remove', {
+    projectDir,
+    service,
+    config: cfg,
+    options
+  });
+
+  console.log(chalk.green(`✅ Service '${serviceName}' removed successfully`));
+
+  // Show updated services table
+  if (cfg.services.length > 0) {
+    console.log(chalk.blue('\n📊 Remaining services:'));
+    renderServicesTable(cfg.services);
+  } else {
+    console.log(chalk.yellow('\n📭 No services remaining in the workspace'));
+  }
+}
+
+// Plugin removal logic
+export async function removePlugin(projectDir, pluginName, options = {}) {
+  const configPath = path.join(projectDir, 'polyglot.json');
+  if (!(await fs.pathExists(configPath))) {
+    throw new Error('polyglot.json not found. Are you in a create-polyglot project?');
+  }
+
+  // Initialize plugins for this project if not already done
+  await initializePlugins(projectDir);
+
+  // Check if plugin exists
+  const { pluginSystem } = await import('./plugin-system.js');
+  await pluginSystem.initialize(projectDir);
+  const plugin = pluginSystem.getPlugin(pluginName);
+  
+  if (!plugin) {
+    throw new Error(`Plugin '${pluginName}' not found.`);
+  }
+
+  // Call before:plugin:unload hook
+  await callHook('before:plugin:unload', {
+    projectDir,
+    pluginName,
+    plugin,
+    options
+  });
+
+  // Confirmation prompt unless --yes is used
+  if (!options.yes) {
+    const prompts = (await import('prompts')).default;
+    const confirmRemoval = await prompts({
+      type: 'confirm',
+      name: 'confirmed',
+      message: `Are you sure you want to remove plugin '${pluginName}'?`,
+      initial: false
+    });
+
+    if (!confirmRemoval.confirmed) {
+      console.log(chalk.yellow('Plugin removal cancelled.'));
+      return;
+    }
+  }
+
+  // Remove plugin from configuration
+  const cfg = await fs.readJSON(configPath);
+  if (cfg.plugins && cfg.plugins[pluginName]) {
+    delete cfg.plugins[pluginName];
+    await fs.writeJSON(configPath, cfg, { spaces: 2 });
+    console.log(chalk.blue(`🔧 Removed plugin configuration`));
+  }
+
+  // Remove plugin files unless --keep-files is used
+  if (!options.keepFiles && plugin.type === 'local') {
+    const pluginPath = path.join(projectDir, 'plugins', pluginName);
+    if (await fs.pathExists(pluginPath)) {
+      await fs.remove(pluginPath);
+      console.log(chalk.blue(`🗑️  Removed plugin files from plugins/${pluginName}`));
+    }
+  } else if (options.keepFiles) {
+    console.log(chalk.yellow(`📁 Plugin files kept (--keep-files option)`));
+  } else if (plugin.type === 'external') {
+    console.log(chalk.blue(`🔗 External plugin reference removed from configuration`));
+  }
+
+  // Unload plugin from system
+  try {
+    // Remove from loaded plugins without saving to config (we already deleted it)
+    if (pluginSystem.plugins.has(pluginName)) {
+      await callHook('before:plugin:unload', { plugin: pluginSystem.plugins.get(pluginName) });
+      pluginSystem.plugins.delete(pluginName);
+      await callHook('after:plugin:unload', { pluginName });
+    }
+    console.log(chalk.blue(`🔌 Plugin unloaded from system`));
+  } catch (e) {
+    console.warn(chalk.yellow(`⚠️  Could not unload plugin: ${e.message}`));
+  }
+
+  // Call after:plugin:unload hook
+  await callHook('after:plugin:unload', {
+    projectDir,
+    pluginName,
+    plugin,
+    options
+  });
+
+  console.log(chalk.green(`✅ Plugin '${pluginName}' removed successfully`));
+
+  // Show remaining plugins
+  const remainingPlugins = pluginSystem.getAllPlugins().filter(p => p.name !== pluginName);
+  if (remainingPlugins.length > 0) {
+    console.log(chalk.blue('\n🔌 Remaining plugins:'));
+    for (const plugin of remainingPlugins) {
+      const status = plugin.enabled ? chalk.green('enabled') : chalk.red('disabled');
+      const type = plugin.type === 'local' ? chalk.cyan('local') : chalk.magenta('external');
+      console.log(`  ${chalk.bold(plugin.name)} [${status}] (${type})`);
+    }
+  } else {
+    console.log(chalk.yellow('\n📭 No plugins remaining in the workspace'));
+  }
+}

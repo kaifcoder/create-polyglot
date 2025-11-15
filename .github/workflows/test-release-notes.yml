@@ -1,0 +1,374 @@
+name: Test Release Notes Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_scenario:
+        description: 'Test scenario to run'
+        required: true
+        default: 'basic'
+        type: choice
+        options:
+          - basic
+          - with_breaking_changes
+          - comprehensive
+      target_branch:
+        description: 'Target branch for testing (default: current branch)'
+        required: false
+        type: string
+
+jobs:
+  test-release-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.target_branch || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create test commits for scenario
+        run: |
+          # Configure git for test commits
+          git config user.name "Test Release Notes"
+          git config user.email "test@create-polyglot.dev"
+          
+          # Create a test branch
+          TEST_BRANCH="test-release-notes-$(date +%s)"
+          git checkout -b "$TEST_BRANCH"
+          
+          # Create test commits based on scenario
+          case "${{ github.event.inputs.test_scenario }}" in
+            "basic")
+              echo "# Test feature" > test-feature.md
+              git add test-feature.md
+              git commit -m "feat: add new test feature for users"
+              
+              echo "# Test fix" > test-fix.md  
+              git add test-fix.md
+              git commit -m "fix: resolve issue with test functionality"
+              
+              echo "# Test docs" > test-docs.md
+              git add test-docs.md
+              git commit -m "docs: update README with test information"
+              ;;
+              
+            "with_breaking_changes")
+              echo "# Breaking feature" > breaking-feature.md
+              git add breaking-feature.md
+              git commit -m "feat!: change API structure (breaking change)"
+              
+              echo "# Regular fix" > regular-fix.md
+              git add regular-fix.md  
+              git commit -m "fix: patch minor bug in CLI"
+              
+              echo "# Chore" > chore-update.md
+              git add chore-update.md
+              git commit -m "chore: update build dependencies"
+              ;;
+              
+            "comprehensive")
+              # Features
+              echo "# New feature 1" > feature1.md
+              git add feature1.md
+              git commit -m "feat(cli): add Kong API gateway support"
+              
+              echo "# New feature 2" > feature2.md
+              git add feature2.md
+              git commit -m "feat(templates): implement Go service template"
+              
+              # Bug fixes
+              echo "# Bug fix 1" > bugfix1.md
+              git add bugfix1.md
+              git commit -m "fix(docker): resolve port binding issues"
+              
+              echo "# Bug fix 2" > bugfix2.md
+              git add bugfix2.md
+              git commit -m "fix: patch service discovery problems"
+              
+              # Breaking change
+              echo "# Breaking change" > breaking.md
+              git add breaking.md
+              git commit -m "feat!: restructure service configuration format"
+              
+              # Documentation
+              echo "# Docs update" > docs.md
+              git add docs.md
+              git commit -m "docs: add comprehensive API documentation"
+              
+              # Dependencies
+              echo "# Deps update" > deps.md
+              git add deps.md
+              git commit -m "deps: bump chalk to v5.6.2 for security fix"
+              
+              # Internal changes
+              echo "# Test update" > test.md
+              git add test.md
+              git commit -m "test: add integration tests for CLI commands"
+              
+              echo "# CI update" > ci.md
+              git add ci.md
+              git commit -m "ci: improve GitHub Actions workflow performance"
+              
+              # Other
+              echo "# Other change" > other.md
+              git add other.md
+              git commit -m "update project configuration for better DX"
+              ;;
+          esac
+          
+          # Create a test tag
+          TEST_TAG="v0.0.0-test-$(date +%s)"
+          git tag "$TEST_TAG"
+          
+          # Export variables for next steps
+          echo "TEST_BRANCH=$TEST_BRANCH" >> $GITHUB_ENV
+          echo "TEST_TAG=$TEST_TAG" >> $GITHUB_ENV
+          
+          # Get the previous tag for comparison
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "$TEST_TAG" | head -n 1)
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "PREVIOUS_TAG=$PREVIOUS_TAG" >> $GITHUB_ENV
+
+      - name: Test categorization logic
+        run: |
+          # Simulate the categorization logic from the main workflow
+          declare -a features=()
+          declare -a bugfixes=()
+          declare -a breaking=()
+          declare -a documentation=()
+          declare -a internal=()
+          declare -a dependencies=()
+          declare -a other=()
+          
+          # Get commits for testing
+          COMMITS=$(git log $PREVIOUS_TAG..$TEST_TAG --pretty=format:"%h|%s|%an" --no-merges)
+          
+          echo "=== Testing Commit Categorization ==="
+          echo "Commits to categorize:"
+          echo "$COMMITS"
+          echo ""
+          
+          # Categorize commits (same logic as main workflow)
+          while IFS='|' read -r hash subject author; do
+            if [[ -z "$hash" ]]; then continue; fi
+            
+            lower_subject=$(echo "$subject" | tr '[:upper:]' '[:lower:]')
+            
+            echo "Processing: $subject"
+            
+            if [[ $lower_subject =~ ^feat(\(.*\))?!: ]] || [[ $lower_subject =~ breaking ]]; then
+              breaking+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: BREAKING CHANGE"
+            elif [[ $lower_subject =~ ^feat(\(.*\))?: ]] || [[ $lower_subject =~ ^add ]] || [[ $lower_subject =~ ^implement ]]; then
+              features+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: FEATURE"
+            elif [[ $lower_subject =~ ^fix(\(.*\))?: ]] || [[ $lower_subject =~ ^bug ]] || [[ $lower_subject =~ ^patch ]]; then
+              bugfixes+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: BUG FIX"
+            elif [[ $lower_subject =~ ^docs(\(.*\))?: ]] || [[ $lower_subject =~ documentation ]] || [[ $lower_subject =~ readme ]]; then
+              documentation+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: DOCUMENTATION"
+            elif [[ $lower_subject =~ ^chore(\(.*\))?: ]] || [[ $lower_subject =~ ^ci(\(.*\))?: ]] || [[ $lower_subject =~ ^test(\(.*\))?: ]] || [[ $lower_subject =~ ^refactor(\(.*\))?: ]]; then
+              internal+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: INTERNAL"
+            elif [[ $lower_subject =~ ^deps(\(.*\))?: ]] || [[ $lower_subject =~ dependencies ]] || [[ $lower_subject =~ package ]] || [[ $lower_subject =~ bump ]]; then
+              dependencies+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: DEPENDENCIES"
+            else
+              other+=("- $subject ([${hash}](https://github.com/${{ github.repository }}/commit/${hash})) by @${author}")
+              echo "  → Categorized as: OTHER"
+            fi
+            echo ""
+          done <<< "$COMMITS"
+          
+          # Save results
+          printf '%s\n' "${features[@]}" > features.txt
+          printf '%s\n' "${bugfixes[@]}" > bugfixes.txt
+          printf '%s\n' "${breaking[@]}" > breaking.txt
+          printf '%s\n' "${documentation[@]}" > documentation.txt
+          printf '%s\n' "${internal[@]}" > internal.txt
+          printf '%s\n' "${dependencies[@]}" > dependencies.txt
+          printf '%s\n' "${other[@]}" > other.txt
+          
+          # Display categorization results
+          echo "=== Categorization Results ==="
+          echo "Features ($(wc -l < features.txt)):"
+          cat features.txt | head -5
+          echo ""
+          echo "Bug Fixes ($(wc -l < bugfixes.txt)):"
+          cat bugfixes.txt | head -5
+          echo ""
+          echo "Breaking Changes ($(wc -l < breaking.txt)):"
+          cat breaking.txt | head -5
+          echo ""
+          echo "Documentation ($(wc -l < documentation.txt)):"
+          cat documentation.txt | head -5
+          echo ""
+          echo "Internal ($(wc -l < internal.txt)):"
+          cat internal.txt | head -5
+          echo ""
+          echo "Dependencies ($(wc -l < dependencies.txt)):"
+          cat dependencies.txt | head -5
+          echo ""
+          echo "Other ($(wc -l < other.txt)):"
+          cat other.txt | head -5
+
+      - name: Test template generation
+        run: |
+          # Test the template substitution logic
+          echo "=== Testing Template Generation ==="
+          
+          # Read template
+          TEMPLATE=$(cat .github/release-notes-template.md)
+          
+          # Read categorized sections
+          FEATURES=$(cat features.txt || echo "No new features in this release.")
+          BUGFIXES=$(cat bugfixes.txt || echo "No bug fixes in this release.")  
+          BREAKING=$(cat breaking.txt || echo "No breaking changes in this release.")
+          DOCUMENTATION=$(cat documentation.txt || echo "No documentation changes in this release.")
+          INTERNAL=$(cat internal.txt || echo "No internal changes in this release.")
+          DEPENDENCIES=$(cat dependencies.txt || echo "No dependency updates in this release.")
+          OTHER=$(cat other.txt || echo "No other changes in this release.")
+          
+          # Get contributors
+          CONTRIBUTORS=$(git log $PREVIOUS_TAG..$TEST_TAG --pretty=format:"%an" --no-merges | sort -u | sed 's/^/- @/' | tr '\n' '\n')
+          
+          # Replace placeholders
+          NOTES="$TEMPLATE"
+          NOTES="${NOTES//\{version\}/0.0.0-test}"
+          NOTES="${NOTES//\{features\}/$FEATURES}"
+          NOTES="${NOTES//\{bugfixes\}/$BUGFIXES}"
+          NOTES="${NOTES//\{breaking\}/$BREAKING}"
+          NOTES="${NOTES//\{documentation\}/$DOCUMENTATION}"
+          NOTES="${NOTES//\{internal\}/$INTERNAL}"
+          NOTES="${NOTES//\{dependencies\}/$DEPENDENCIES}"
+          NOTES="${NOTES//\{other\}/$OTHER}"
+          NOTES="${NOTES//\{compare_url\}/https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TEST_TAG}"
+          NOTES="${NOTES//\{contributors\}/$CONTRIBUTORS}"
+          NOTES="${NOTES//\{commits\}/[View all commits](https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TEST_TAG)}"
+          NOTES="${NOTES//\{upgrade_notes\}/<!-- Add any upgrade notes or migration steps here -->}"
+          NOTES="${NOTES//\{known_issues\}/<!-- Add any known issues or caveats here -->}"
+          
+          # Save generated notes
+          echo "$NOTES" > test-release-notes.md
+          
+          echo "✅ Template generation completed successfully!"
+          echo ""
+          echo "=== Generated Release Notes Preview ==="
+          head -50 test-release-notes.md
+
+      - name: Validate generated content
+        run: |
+          echo "=== Validating Generated Content ==="
+          
+          # Check if file was created
+          if [[ ! -f test-release-notes.md ]]; then
+            echo "❌ Release notes file was not generated"
+            exit 1
+          fi
+          
+          # Check if template placeholders were replaced
+          if grep -q "{version}" test-release-notes.md; then
+            echo "❌ Version placeholder was not replaced"
+            exit 1
+          fi
+          
+          if grep -q "{compare_url}" test-release-notes.md; then
+            echo "❌ Compare URL placeholder was not replaced"
+            exit 1
+          fi
+          
+          # Check for expected sections
+          sections=("Features Added" "Bug Fixes" "Breaking Changes" "Documentation" "Internal/DevOps" "Dependencies" "Other Changes")
+          for section in "${sections[@]}"; do
+            if ! grep -q "$section" test-release-notes.md; then
+              echo "❌ Missing section: $section"
+              exit 1
+            fi
+          done
+          
+          # Check scenario-specific content
+          case "${{ github.event.inputs.test_scenario }}" in
+            "basic")
+              if ! grep -q "add new test feature" test-release-notes.md; then
+                echo "❌ Expected feature commit not found in basic scenario"
+                exit 1
+              fi
+              ;;
+            "with_breaking_changes")
+              if ! grep -q "change API structure" test-release-notes.md; then
+                echo "❌ Expected breaking change not found"
+                exit 1
+              fi
+              ;;
+            "comprehensive")
+              if ! grep -q "Kong API gateway" test-release-notes.md; then
+                echo "❌ Expected comprehensive feature not found"
+                exit 1
+              fi
+              ;;
+          esac
+          
+          echo "✅ All validations passed!"
+
+      - name: Cleanup test artifacts
+        if: always()
+        run: |
+          echo "=== Cleaning up test artifacts ==="
+          
+          # Remove test tag if it exists
+          if git tag -l | grep -q "$TEST_TAG"; then
+            git tag -d "$TEST_TAG" || echo "Failed to delete test tag (non-critical)"
+          fi
+          
+          # Switch back to original branch and delete test branch
+          git checkout "${{ github.event.inputs.target_branch || github.ref_name }}" || git checkout main
+          if git branch | grep -q "$TEST_BRANCH"; then
+            git branch -D "$TEST_BRANCH" || echo "Failed to delete test branch (non-critical)"
+          fi
+          
+          echo "✅ Cleanup completed"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-notes-test-results-${{ github.event.inputs.test_scenario }}
+          path: |
+            test-release-notes.md
+            features.txt
+            bugfixes.txt
+            breaking.txt
+            documentation.txt
+            internal.txt
+            dependencies.txt
+            other.txt
+          retention-days: 7
+
+      - name: Test summary
+        run: |
+          echo "=== Test Summary ==="
+          echo "✅ Scenario: ${{ github.event.inputs.test_scenario }}"
+          echo "✅ Commit categorization working correctly"
+          echo "✅ Template generation successful"
+          echo "✅ Content validation passed"
+          echo "✅ All test artifacts uploaded"
+          echo ""
+          echo "🎉 Release notes generation system is working correctly!"
+          echo ""
+          echo "Next steps:"
+          echo "1. Review the generated release notes in the artifacts"
+          echo "2. Test the actual workflow with a real release"
+          echo "3. Make any necessary adjustments to categorization rules"
