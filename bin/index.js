@@ -52,10 +52,10 @@ program
 // Additional commands must be registered before final parse.
 program
   .command('add')
-  .description('Add a new service or plugin')
-  .argument('<entity>', 'service | plugin')
-  .argument('<name>', 'Name of the service or plugin')
-  .option('--type <type>', 'Service type (node|python|go|java|frontend)')
+  .description('Add a new service, plugin, or shared library')
+  .argument('<entity>', 'service | plugin | lib')
+  .argument('<name>', 'Name of the service, plugin, or library')
+  .option('--type <type>', 'Service type (node|python|go|java|frontend|remix|astro|sveltekit) or Library type (python|go)')
   .option('--lang <type>', '(Deprecated) Alias of --type')
   .option('--port <port>', 'Service port')
   .option('--yes', 'Non-interactive defaults')
@@ -74,7 +74,10 @@ program
               { title: 'Python', value: 'python' },
               { title: 'Go', value: 'go' },
               { title: 'Java', value: 'java' },
-              { title: 'Frontend (Next.js)', value: 'frontend' }
+              { title: 'Frontend (Next.js)', value: 'frontend' },
+              { title: 'Remix', value: 'remix' },
+              { title: 'Astro', value: 'astro' },
+              { title: 'SvelteKit', value: 'sveltekit' }
             ] });
             type = ans.type;
           }
@@ -83,14 +86,30 @@ program
             if (ans.port) port = Number(ans.port);
           }
         }
-        const defaultPorts = { frontend: 3000, node: 3001, go: 3002, java: 3003, python: 3004 };
+  const defaultPorts = { frontend: 3000, node: 3001, go: 3002, java: 3003, python: 3004, remix: 3005, astro: 3006, sveltekit: 3007 };
         if (!type) throw new Error('Service type required');
         if (!port) port = defaultPorts[type];
         await addService(projectDir, { type, name, port }, opts);
       } else if (entity === 'plugin') {
         await scaffoldPlugin(projectDir, name);
+      } else if (entity === 'lib') {
+        let type = opts.type || opts.lang;
+        if (!opts.yes) {
+          const promptsMod = await import('prompts');
+          const p = promptsMod.default;
+          if (!type) {
+            const ans = await p({ type: 'select', name: 'type', message: 'Library type:', choices: [
+              { title: 'Python Package', value: 'python' },
+              { title: 'Go Module', value: 'go' }
+            ] });
+            type = ans.type;
+          }
+        }
+        if (!type) throw new Error('Library type required');
+        const { scaffoldSharedLibrary } = await import('./lib/scaffold.js');
+        await scaffoldSharedLibrary(projectDir, { type, name }, opts);
       } else {
-        console.error(chalk.red(`Unknown entity '${entity}'. Use service or plugin.`));
+        console.error(chalk.red(`Unknown entity '${entity}'. Use service, plugin, or lib.`));
         process.exit(1);
       }
     } catch (e) {
@@ -101,10 +120,10 @@ program
 
 program
   .command('remove')
-  .description('Remove a service or plugin')
-  .argument('<entity>', 'service | plugin')
-  .argument('<name>', 'Name of the service or plugin')
-  .option('--keep-files', 'Keep service files, only remove from configuration')
+  .description('Remove a service, plugin, or shared library')
+  .argument('<entity>', 'service | plugin | lib')
+  .argument('<name>', 'Name of the service, plugin, or library')
+  .option('--keep-files', 'Keep service/library files, only remove from configuration')
   .option('--yes', 'Skip confirmation prompt')
   .action(async (entity, name, opts) => {
     const projectDir = process.cwd();
@@ -113,8 +132,11 @@ program
         await removeService(projectDir, name, opts);
       } else if (entity === 'plugin') {
         await removePlugin(projectDir, name, opts);
+      } else if (entity === 'lib') {
+        const { removeSharedLibrary } = await import('./lib/scaffold.js');
+        await removeSharedLibrary(projectDir, name, opts);
       } else {
-        console.error(chalk.red(`Unknown entity '${entity}'. Use service or plugin.`));
+        console.error(chalk.red(`Unknown entity '${entity}'. Use service, plugin, or lib.`));
         process.exit(1);
       }
     } catch (e) {
@@ -151,6 +173,37 @@ program
       }
     } catch (e) {
       console.error(chalk.red('Failed to list services:'), e.message);
+      process.exit(1);
+    }
+  });
+ 
+program
+  .command('libraries')
+  .alias('libs')
+  .description('List shared libraries in the current workspace (table)')
+  .option('--json', 'Output raw JSON instead of table')
+  .action(async (opts) => {
+    try {
+      const cwd = process.cwd();
+      const cfgPath = path.join(cwd, 'polyglot.json');
+      if (!fs.existsSync(cfgPath)) {
+        console.log(chalk.red('polyglot.json not found. Run inside a generated workspace.'));
+        process.exit(1);
+      }
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      const libs = cfg.sharedLibs || [];
+      if (opts.json) {
+        console.log(JSON.stringify(libs, null, 2));
+      } else {
+        if (libs.length === 0) {
+          console.log(chalk.yellow('No shared libraries found.'));
+        } else {
+          const { renderLibrariesTable } = await import('./lib/ui.js');
+          renderLibrariesTable(libs, { title: 'Shared Libraries' });
+        }
+      }
+    } catch (e) {
+      console.error(chalk.red('Failed to list libraries:'), e.message);
       process.exit(1);
     }
   });

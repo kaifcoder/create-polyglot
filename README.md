@@ -14,7 +14,7 @@
 [![npm downloads](https://img.shields.io/npm/dw/create-polyglot.svg)](https://www.npmjs.com/package/create-polyglot)
 
 <strong>Scaffold a modern polyglot microservices monorepo in seconds.</strong><br/>
-Generate Node.js, Python (FastAPI), Go, Java (Spring Boot), and Next.js frontend services with optional Turborepo or Nx presets, Docker Compose, shared packages, plugin hooks, and a persisted configuration file.
+Generate Node.js, Python (FastAPI), Go, Java (Spring Boot), Next.js, plus optional modern frontend frameworks (Remix, Astro, SvelteKit) with Turborepo or Nx presets, Docker Compose, shared packages, plugin hooks, and a persisted configuration file.
 
 </div>
 
@@ -54,12 +54,13 @@ Use it to prototype architectures, onboard teams faster, or spin up reproducible
 
 ## Features
 
-- 🚀 Rapid polyglot monorepo scaffolding (Node.js, Python/FastAPI, Go, Java Spring Boot, Next.js)
+- 🚀 Rapid polyglot monorepo scaffolding (Node.js, Python/FastAPI, Go, Java Spring Boot, Next.js, Remix, Astro, SvelteKit)
 - 🧩 Optional presets: Turborepo, Nx, or Basic runner
 - 🐳 Automatic Dockerfile + Docker Compose generation
 - 🛠 Interactive wizard (or fully non-interactive via flags)
 - 🔁 Post-init extensibility: add services & plugins anytime
 - 📦 Shared package (`packages/shared`) for cross-service JS utilities
+- 📚 **Language-specific shared libraries** (Python packages, Go modules, Java libraries)
 - 🧪 Vitest test setup for the CLI itself
 - 🌈 Colorized dev logs & health probing for Node/frontend services
 - 🔥 Unified hot reload aggregator (`create-polyglot hot`) for Node, Next.js, Python (uvicorn), Go, and Java (Spring Boot)
@@ -167,14 +168,17 @@ create-polyglot dev --docker
 | `create-polyglot init <name>` | Scaffold a new workspace (root invocation without `init` is deprecated). |
 | `create-polyglot add service <name>` | Add a service after init (`--type`, `--port`, `--yes`). |
 | `create-polyglot add plugin <name>` | Create plugin skeleton under `plugins/<name>`. |
+| `create-polyglot add lib <name>` | Create a shared library (`--type python|go|java`, `--yes`). |
 | `create-polyglot remove service <name>` | Remove a service from the workspace (`--keep-files`, `--yes`). |
 | `create-polyglot remove plugin <name>` | Remove a plugin from the workspace (`--keep-files`, `--yes`). |
+| `create-polyglot remove lib <name>` | Remove a shared library from the workspace (`--keep-files`, `--yes`). |
+| `create-polyglot libraries` / `libs` | List all shared libraries (`--json`). |
 | `create-polyglot dev [--docker]` | Run Node & frontend services locally or all via compose. |
 
 ## Init Options
 | Flag | Description |
 |------|-------------|
-| `-s, --services <list>` | Comma separated services: `node,python,go,java,frontend` |
+| `-s, --services <list>` | Comma separated services: `node,python,go,java,frontend,remix,astro,sveltekit` |
 | `--preset <name>` | `turborepo`, `nx`, or `basic` (default auto -> asks) |
 | `--git` | Initialize git repo & initial commit |
 | `--no-install` | Skip dependency installation step |
@@ -224,25 +228,51 @@ my-org/
 
 ## Development Workflow
 1. Scaffold with `init`.
-2. (Optional) Add more services or plugins.
+2. (Optional) Add more services, plugins, or shared libraries.
 3. Run `create-polyglot dev` (local) or `create-polyglot dev --docker`.
 4. Edit services under `services/<name>`.
 5. Extend infra / databases inside `compose.yaml`.
 
-## Managing Services & Plugins
+## Managing Services, Plugins & Shared Libraries
 
 ### Adding Components
-Add services after initial scaffolding:
+Add services, plugins, and shared libraries after initial scaffolding:
 ```bash
+# Add services
 create-polyglot add service payments --type node --port 4100
+
+# Add plugins  
 create-polyglot add plugin analytics
+
+# Add shared libraries
+create-polyglot add lib common-utils --type python
+create-polyglot add lib shared-models --type go
+create-polyglot add lib data-types --type java
+```
+
+### Listing Components
+```bash
+# List all services
+create-polyglot services
+
+# List all shared libraries
+create-polyglot libraries
+
+# Get JSON output
+create-polyglot libs --json
 ```
 
 ### Removing Components
-Clean removal of services and plugins:
+Clean removal of services, plugins, and shared libraries:
 ```bash
 # Remove a service (including files and configuration)
 create-polyglot remove service payments --yes
+
+# Remove a shared library
+create-polyglot remove lib common-utils
+
+# Keep files but remove from configuration
+create-polyglot remove lib common-utils --keep-files
 
 # Remove a plugin  
 create-polyglot remove plugin analytics --yes
@@ -305,21 +335,39 @@ If `--frontend-generator create-next-app` is supplied, the tool shells out to `n
 Example:
 ```jsonc
 {
-  "name": "my-org",
+  "name": "my-org", 
   "preset": "none",
   "packageManager": "npm",
   "services": [
     { "name": "node", "type": "node", "port": 3001, "path": "services/node" }
-  ]
+  ],
+  "sharedLibs": [
+    { "name": "common-utils", "type": "python", "path": "packages/libs/common-utils", "createdAt": "2024-01-15T10:30:00.000Z" }
+  ],
+  "plugins": {}
 }
 ```
-Used by `add service` to assert uniqueness and regenerate `compose.yaml`.
+Used by `add service` and `add lib` to assert uniqueness and regenerate `compose.yaml`.
 
 ## Plugins
 `create-polyglot add plugin <name>` scaffolds `plugins/<name>/index.js` with a hook skeleton (`afterInit`). Future releases will execute hooks automatically during lifecycle events.
 
-## Shared Package
+## Shared Libraries
 `packages/shared` shows cross-service Node utilities. Extend or add per-language shared modules.
+
+For language-specific shared libraries:
+```bash
+# Create Python package
+create-polyglot add lib utils --type python
+
+# Create Go module  
+create-polyglot add lib common --type go
+
+# Create Java library
+create-polyglot add lib models --type java
+```
+
+See [Shared Libraries Guide](./docs/guide/shared-libraries.md) for detailed usage.
 
 ## Force Overwrite
 If the target directory already exists, the CLI aborts unless `--force` is passed. Use with caution.
@@ -335,8 +383,9 @@ Generates ESLint + Prettier base configs at the root. Extend rules per service i
 - Healthchecks and depends_on in `compose.yaml`
 - Additional generators (Remix, Astro, SvelteKit)
 - Automatic test harness & CI workflow template
-- Language-specific shared libs (Python package, Go module)
 - Hot reload integration aggregator
+- Service dependency management
+- Cross-language testing utilities
 
 ## Contributing
 Contributions welcome! See `CONTRIBUTING.md` for guidelines. Please run tests before submitting a PR:

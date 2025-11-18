@@ -139,12 +139,15 @@ export async function scaffoldMonorepo(projectNameArg, options) {
       { title: 'Python (FastAPI)', value: 'python' },
       { title: 'Go (Fiber-like)', value: 'go' },
       { title: 'Java (Spring Boot)', value: 'java' },
-      { title: 'Frontend (Next.js)', value: 'frontend' }
+      { title: 'Frontend (Next.js)', value: 'frontend' },
+      { title: 'Remix', value: 'remix' },
+      { title: 'Astro', value: 'astro' },
+      { title: 'SvelteKit', value: 'sveltekit' }
     ];
     const templateMap = { java: 'spring-boot' };
     let services = [];
     const reservedNames = new Set(['scripts','packages','apps','node_modules','docker','compose','compose.yaml']);
-    const defaultPorts = { frontend: 3000, node: 3001, go: 3002, java: 3003, python: 3004 };
+  const defaultPorts = { frontend: 3000, node: 3001, go: 3002, java: 3003, python: 3004, remix: 3005, astro: 3006, sveltekit: 3007 };
 
     if (options.services) {
       const validValues = allServiceChoices.map(c => c.value);
@@ -330,29 +333,58 @@ export async function scaffoldMonorepo(projectNameArg, options) {
           console.log(chalk.yellow(`⚠️  create-next-app failed: ${e.message}. Using template.`));
         }
       }
+      // Strict external generators for new frameworks: abort on failure (no internal fallback yet)
+      if (svcType === 'remix') {
+        try {
+          console.log(chalk.cyan('⚙️  Running Remix generator (create-react-router with basic template)...'));
+          await execa('npx', ['--yes', 'create-react-router@latest', '.', '--template', 'remix-run/react-router/examples/basic', '--no-git-init', '--no-install'], { cwd: dest, stdio: 'inherit' });
+          usedGenerator = true;
+        } catch (e) {
+          console.error(chalk.red(`❌ create-react-router failed: ${e.message}. Aborting scaffold for this service.`));
+          continue; // skip creating this service
+        }
+      } else if (svcType === 'astro') {
+        try {
+          console.log(chalk.cyan('⚙️  Running Astro generator (create-astro)...'));
+          await execa('npx', ['--yes', 'create-astro@latest', '.', '--template', 'minimal', '--no-install', '--no-git'], { cwd: dest, stdio: 'inherit' });
+          usedGenerator = true;
+        } catch (e) {
+          console.error(chalk.red(`❌ create-astro failed: ${e.message}. Aborting scaffold for this service.`));
+          continue;
+        }
+      } else if (svcType === 'sveltekit') {
+        try {
+          console.log(chalk.cyan('⚙️  Running SvelteKit generator (sv create)...'));
+          await execa('npx', ['sv', 'create', '.', '--template', 'minimal', '--types', 'ts', '--no-install', '--no-add-ons'], { cwd: dest, stdio: 'inherit' });
+          usedGenerator = true;
+        } catch (e) {
+          console.error(chalk.red(`❌ sv create failed: ${e.message}. Aborting scaffold for this service.`));
+          continue;
+        }
+      }
       if (!usedGenerator) {
-        if (await fs.pathExists(src) && (await fs.readdir(src)).length > 0) {
-          await fs.copy(src, dest, { overwrite: true });
-          
-          // Dynamically update the name field in package.json for Node.js services
-          if (svcType === 'node') {
-            const packageJsonPath = path.join(dest, 'package.json');
-            if (await fs.pathExists(packageJsonPath)) {
-              const packageJson = await fs.readJSON(packageJsonPath);
-              packageJson.name = `@${projectNameArg || 'polyglot'}/${svcName}`; // Ensure unique name
-              await fs.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+        // Non-framework services use internal templates
+        if (svcType !== 'remix' && svcType !== 'astro' && svcType !== 'sveltekit') {
+          if (await fs.pathExists(src) && (await fs.readdir(src)).length > 0) {
+            await fs.copy(src, dest, { overwrite: true });
+            if (svcType === 'node') {
+              const packageJsonPath = path.join(dest, 'package.json');
+              if (await fs.pathExists(packageJsonPath)) {
+                const packageJson = await fs.readJSON(packageJsonPath);
+                packageJson.name = `@${projectNameArg || 'polyglot'}/${svcName}`;
+                await fs.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+              }
             }
-          }
-          
-          if (templateFolder === 'spring-boot') {
-            const propTxt = path.join(dest, 'src/main/resources/application.properties.txt');
-            const prop = path.join(dest, 'src/main/resources/application.properties');
-            if (await fs.pathExists(propTxt) && !(await fs.pathExists(prop))) {
-              await fs.move(propTxt, prop);
+            if (templateFolder === 'spring-boot') {
+              const propTxt = path.join(dest, 'src/main/resources/application.properties.txt');
+              const prop = path.join(dest, 'src/main/resources/application.properties');
+              if (await fs.pathExists(propTxt) && !(await fs.pathExists(prop))) {
+                await fs.move(propTxt, prop);
+              }
             }
+          } else {
+            await fs.writeFile(path.join(dest, 'README.md'), `# ${svcName} service\n\nScaffolded by create-polyglot.`);
           }
-        } else {
-          await fs.writeFile(path.join(dest, 'README.md'), `# ${svcName} service\n\nScaffolded by create-polyglot.`);
         }
       }
 
@@ -419,6 +451,11 @@ export async function scaffoldMonorepo(projectNameArg, options) {
       await fs.writeFile(path.join(sharedDir, 'src/index.js'), 'export function greet(name){return `Hello, ${name}`;}');
     }
 
+    // Create shared libraries directory
+    const libsDir = path.join(projectDir, 'packages/libs');
+    await fs.mkdirp(libsDir);
+    await fs.writeFile(path.join(libsDir, '.gitkeep'), '# Shared libraries directory\n# This directory contains language-specific shared libraries\n# Generated by create-polyglot\n');
+
     await fs.writeFile(path.join(projectDir, '.eslintrc.cjs'), 'module.exports={root:true,env:{node:true,es2022:true},extends:[\'eslint:recommended\',\'plugin:import/recommended\',\'prettier\'],parserOptions:{ecmaVersion:\'latest\',sourceType:\'module\'},rules:{}};\n');
     await fs.writeJSON(path.join(projectDir, '.prettierrc'), { singleQuote: true, semi: true, trailingComma: 'es5' }, { spaces: 2 });
 
@@ -444,7 +481,7 @@ export async function scaffoldMonorepo(projectNameArg, options) {
       const dockerfile = path.join(svcDir, 'Dockerfile');
       if (!(await fs.pathExists(dockerfile))) {
         let dockerContent = '';
-        if (svcObj.type === 'node' || svcObj.type === 'frontend') {
+  if (svcObj.type === 'node' || svcObj.type === 'frontend' || ['remix','astro','sveltekit'].includes(svcObj.type)) {
           dockerContent = `# ${svcObj.name} (${svcObj.type}) service\nFROM node:20-alpine AS deps\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --omit=dev || true\nCOPY . .\nEXPOSE ${port}\nCMD [\"npm\", \"run\", \"dev\"]\n`;
         } else if (svcObj.type === 'python') {
           dockerContent = `FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt ./\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nEXPOSE ${port}\nCMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"${port}\"]\n`;
@@ -547,6 +584,7 @@ export async function scaffoldMonorepo(projectNameArg, options) {
       preset: options.preset || 'none',
       packageManager: options.packageManager,
       services: services.map(s => ({ name: s.name, type: s.type, port: s.port, path: `services/${s.name}` })),
+      sharedLibs: [],
       plugins: {}
     };
     await fs.writeJSON(path.join(projectDir, 'polyglot.json'), polyglotConfig, { spaces: 2 });
@@ -1273,5 +1311,281 @@ export async function removePlugin(projectDir, pluginName, options = {}) {
     }
   } else {
     console.log(chalk.yellow('\n📭 No plugins remaining in the workspace'));
+  }
+}
+
+// Shared Library Management Functions
+
+export async function scaffoldSharedLibrary(projectDir, { type, name }, options = {}) {
+  const configPath = path.join(projectDir, 'polyglot.json');
+  if (!fs.existsSync(configPath)) {
+    throw new Error('polyglot.json not found. Are you in a create-polyglot project?');
+  }
+
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  
+  // Validate library name
+  if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
+    throw new Error('Library name must contain only alphanumerics, dash, underscore, or dot');
+  }
+
+  // Check for existing library with same name
+  const existingLibs = config.sharedLibs || [];
+  if (existingLibs.find(lib => lib.name === name)) {
+    throw new Error(`Shared library '${name}' already exists`);
+  }
+
+  const validTypes = ['python', 'go'];
+  if (!validTypes.includes(type)) {
+    throw new Error(`Invalid library type '${type}'. Must be one of: ${validTypes.join(', ')}`);
+  }
+
+  console.log(chalk.cyanBright(`\n📦 Creating ${type} shared library '${name}'...\n`));
+
+  // Call before:lib:create hook
+  await callHook('before:lib:create', { 
+    name, 
+    type, 
+    projectDir, 
+    config,
+    options 
+  });
+
+  const libDir = path.join(projectDir, 'packages', 'libs', name);
+  await fs.mkdirp(libDir);
+
+  const templateDir = path.join(__dirname, '..', '..', 'templates', 'libs', type);
+  
+  // Copy template files
+  const templateFiles = await fs.readdir(templateDir, { withFileTypes: true });
+  for (const file of templateFiles) {
+    if (file.isFile()) {
+      let content = await fs.readFile(path.join(templateDir, file.name), 'utf-8');
+      
+      // Replace template variables with appropriate naming conventions
+      const packageName = type === 'go' ? name.replace(/-/g, '_') : name;
+      content = content.replace(/\{\{name\}\}/g, packageName);
+      
+      // Handle special file name replacements
+      let targetFileName = file.name;
+      if (file.name.includes('{{name}}')) {
+        targetFileName = file.name.replace(/\{\{name\}\}/g, name);
+      }
+      
+      await fs.writeFile(path.join(libDir, targetFileName), content);
+    } else if (file.isDirectory()) {
+      // Recursively copy directories
+      await fs.copy(path.join(templateDir, file.name), path.join(libDir, file.name));
+    }
+  }
+
+  // Create README.md
+  const readmeContent = `# ${name}
+
+A ${type} shared library for the ${config.name} monorepo.
+
+## Description
+
+This shared library provides common utilities, models, and functions that can be used across multiple services in the monorepo.
+
+## Usage
+
+### ${type === 'python' ? 'Python' : type === 'go' ? 'Go' : 'Java'}
+
+${getUsageExample(type, name)}
+
+## Development
+
+${getDevelopmentInstructions(type)}
+
+## Generated by create-polyglot
+
+This library was generated using create-polyglot. To add more shared libraries:
+
+\`\`\`bash
+npx create-polyglot add lib <name> --type ${type}
+\`\`\`
+`;
+
+  await fs.writeFile(path.join(libDir, 'README.md'), readmeContent);
+
+  // Update polyglot.json
+  const newLib = {
+    name,
+    type,
+    path: `packages/libs/${name}`,
+    createdAt: new Date().toISOString()
+  };
+
+  config.sharedLibs = config.sharedLibs || [];
+  config.sharedLibs.push(newLib);
+  
+  await fs.writeJSON(configPath, config, { spaces: 2 });
+
+  // Call after:lib:create hook
+  await callHook('after:lib:create', {
+    name,
+    type,
+    projectDir,
+    libDir,
+    config,
+    library: newLib,
+    options
+  });
+
+  console.log(chalk.green(`\n✅ Shared library '${name}' created successfully!`));
+  console.log(chalk.cyan(`📁 Location: packages/libs/${name}`));
+  
+  // Show usage suggestions
+  console.log(chalk.blue('\n💡 Next steps:'));
+  console.log(chalk.gray('   • Add your shared code to the library'));
+  console.log(chalk.gray('   • Update services to import from this library'));
+  console.log(chalk.gray(`   • Run 'npx create-polyglot libs' to see all libraries`));
+}
+
+function getUsageExample(type, name) {
+  switch (type) {
+    case 'python':
+      return `\`\`\`python
+# Import utilities from the shared library
+from ${name}.utils import format_response, validate_config
+from ${name}.models import ServiceHealth, ErrorResponse
+
+# Use in your service
+response = format_response({"message": "Hello"}, "success")
+health = ServiceHealth("my-service", "healthy")
+\`\`\``;
+    
+    case 'go':
+      return `\`\`\`go
+// Import from the shared library
+import "${name}"
+
+// Use in your service
+response := ${name}.FormatResponse(data, "success", nil)
+health := ${name}.NewServiceHealth("my-service", "healthy")
+\`\`\``;
+    
+    default:
+      return '// Usage example not available for this type';
+  }
+}
+
+function getDevelopmentInstructions(type) {
+  switch (type) {
+    case 'python':
+      return `\`\`\`bash
+# Install in editable mode
+pip install -e .
+
+# Install development dependencies
+pip install -e .[dev]
+
+# Run tests
+pytest
+
+# Format code
+black .
+
+# Type check
+mypy .
+\`\`\``;
+    
+    case 'go':
+      return `\`\`\`bash
+# Initialize module (if needed)
+go mod tidy
+
+# Run tests
+go test ./...
+
+# Format code
+go fmt ./...
+
+# Lint
+golangci-lint run
+\`\`\``;
+    
+    default:
+      return '// Development instructions not available for this type';
+  }
+}
+
+export async function removeSharedLibrary(projectDir, name, options = {}) {
+  const configPath = path.join(projectDir, 'polyglot.json');
+  if (!fs.existsSync(configPath)) {
+    throw new Error('polyglot.json not found. Are you in a create-polyglot project?');
+  }
+
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  const libs = config.sharedLibs || [];
+  const libToRemove = libs.find(lib => lib.name === name);
+
+  if (!libToRemove) {
+    throw new Error(`Shared library '${name}' not found`);
+  }
+
+  // Confirmation prompt unless --yes
+  if (!options.yes) {
+    const { default: prompts } = await import('prompts');
+    const response = await prompts({
+      type: 'confirm',
+      name: 'confirm',
+      message: `Remove shared library '${name}' (${libToRemove.type})?`,
+      initial: false
+    });
+
+    if (!response.confirm) {
+      console.log(chalk.yellow('❌ Cancelled'));
+      return;
+    }
+  }
+
+  console.log(chalk.cyanBright(`\n🗑️  Removing shared library '${name}'...`));
+
+  // Call before:lib:remove hook
+  await callHook('before:lib:remove', {
+    name,
+    library: libToRemove,
+    projectDir,
+    config,
+    options
+  });
+
+  // Remove from config
+  config.sharedLibs = libs.filter(lib => lib.name !== name);
+  await fs.writeJSON(configPath, config, { spaces: 2 });
+
+  // Remove files unless --keep-files
+  if (!options.keepFiles) {
+    const libDir = path.join(projectDir, libToRemove.path);
+    if (await fs.pathExists(libDir)) {
+      await fs.remove(libDir);
+      console.log(chalk.gray(`📁 Removed directory: ${libToRemove.path}`));
+    }
+  } else {
+    console.log(chalk.yellow(`📁 Kept files: ${libToRemove.path} (use --keep-files=false to remove)`));
+  }
+
+  // Call after:lib:remove hook
+  await callHook('after:lib:remove', {
+    name,
+    library: libToRemove,
+    projectDir,
+    config,
+    options
+  });
+
+  console.log(chalk.green(`✅ Shared library '${name}' removed successfully`));
+
+  // Show remaining libraries
+  const remainingLibs = config.sharedLibs || [];
+  if (remainingLibs.length > 0) {
+    console.log(chalk.blue('\n📚 Remaining libraries:'));
+    for (const lib of remainingLibs) {
+      console.log(`  ${chalk.bold(lib.name)} (${lib.type}) - ${chalk.gray(lib.path)}`);
+    }
+  } else {
+    console.log(chalk.yellow('\n📭 No shared libraries remaining in the workspace'));
   }
 }

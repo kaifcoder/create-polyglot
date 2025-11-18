@@ -6,7 +6,8 @@ export default defineConfig({
   // sets VITEPRESS_BASE automatically; local dev stays '/'.
   base: process.env.VITEPRESS_BASE || '/',
   title: 'create-polyglot',
-  description: 'Scaffold polyglot microservice monorepos (Node, Python, Go, Java, Next.js)',
+  // Updated to reflect newly supported frontend frameworks (Remix, Astro, SvelteKit)
+  description: 'Scaffold polyglot microservice monorepos (Node, Python, Go, Java, Next.js, Remix, Astro, SvelteKit)',
   head: [
     ['meta', { name: 'theme-color', content: '#3e62ad' }],
     ['meta', { name: 'og:title', content: 'create-polyglot' }],
@@ -26,7 +27,8 @@ export default defineConfig({
         { text: 'Getting Started', link: '/guide/getting-started' },
         { text: 'Presets', link: '/guide/presets' },
         { text: 'Docker & Compose', link: '/guide/docker' },
-        { text: 'Extending (New Service)', link: '/guide/extending-service' },
+  { text: 'Extending (New Service)', link: '/guide/extending-service' },
+  { text: 'Frontend Frameworks', link: '/guide/frontend-frameworks' },
         { text: 'Service Logs', link: '/logs-feature' },
         { text: 'Plugin System', link: '/plugin-system' },
         { text: 'Service Controls', link: '/service-controls-feature' },
@@ -46,7 +48,8 @@ export default defineConfig({
         { text: 'Python', link: '/templates/python' },
         { text: 'Go', link: '/templates/go' },
         { text: 'Java (Spring Boot)', link: '/templates/java' },
-        { text: 'Frontend (Next.js)', link: '/templates/frontend' }
+        { text: 'Frontend (Next.js)', link: '/templates/frontend' },
+        { text: 'Frontend Frameworks (Remix/Astro/SvelteKit)', link: '/guide/frontend-frameworks' }
       ]
     },
     socialLinks: [

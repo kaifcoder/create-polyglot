@@ -221,7 +221,7 @@ networks:
       });
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain('Unknown entity \'unknown\'. Use service or plugin.');
+      expect(result.stderr).toContain('Unknown entity \'unknown\'. Use service, plugin, or lib.');
     });
   });
 

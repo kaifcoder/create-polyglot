@@ -48,6 +48,57 @@ export function renderServicesTable(services, { title = 'Services', showHeader =
   console.log(chalk.gray(`Total: ${services.length}`));
 }
 
+export function renderLibrariesTable(libraries, { title = 'Shared Libraries', showHeader = true } = {}) {
+  if (!libraries || !libraries.length) {
+    console.log(chalk.yellow('No shared libraries to display.'));
+    return;
+  }
+  const cols = [
+    { key: 'name', label: 'Name' },
+    { key: 'type', label: 'Type' },
+    { key: 'path', label: 'Path' },
+    { key: 'createdAt', label: 'Created' }
+  ];
+  const rows = libraries.map(lib => ({
+    name: chalk.bold.cyan(lib.name),
+    type: colorLibType(lib.type)(lib.type),
+    path: chalk.dim(lib.path),
+    createdAt: lib.createdAt ? chalk.gray(new Date(lib.createdAt).toLocaleDateString()) : chalk.gray('Unknown')
+  }));
+
+  const termWidth = process.stdout.columns || 80;
+  const minWidthNeeded = cols.reduce((a,c)=>a + c.label.length + 5, 0);
+  if (termWidth < minWidthNeeded) {
+    console.table(libraries.map(lib => ({ 
+      name: lib.name, 
+      type: lib.type, 
+      path: lib.path, 
+      created: lib.createdAt ? new Date(lib.createdAt).toLocaleDateString() : 'Unknown'
+    })));
+    return;
+  }
+
+  const colWidths = cols.map(c => Math.max(c.label.length, ...rows.map(r => strip(r[c.key]).length)) + 2);
+  const totalWidth = colWidths.reduce((a,b)=>a+b,0) + cols.length + 1;
+  const top = '┌' + colWidths.map(w => '─'.repeat(w)).join('┬') + '┐';
+  const sep = '├' + colWidths.map(w => '─'.repeat(w)).join('┼') + '┤';
+  const bottom = '└' + colWidths.map(w => '─'.repeat(w)).join('┴') + '┘';
+
+  console.log(chalk.magentaBright(`\n${title}`));
+  console.log(top);
+  if (showHeader) {
+    const header = '│' + cols.map((c,i)=>pad(chalk.bold.white(c.label), colWidths[i])).join('│') + '│';
+    console.log(header);
+    console.log(sep);
+  }
+  for (const r of rows) {
+    const line = '│' + cols.map((c,i)=>pad(r[c.key], colWidths[i])).join('│') + '│';
+    console.log(line);
+  }
+  console.log(bottom);
+  console.log(chalk.gray(`Total: ${libraries.length}`));
+}
+
 function pad(str, width) {
   const raw = strip(str);
   const diff = width - raw.length;
@@ -66,6 +117,14 @@ function colorType(type) {
     case 'java': return chalk.red;
     case 'frontend': return chalk.blue;
     default: return chalk.white;
+  }
+}
+
+function colorLibType(type) {
+  switch(type) {
+    case 'python': return chalk.yellow.bold;
+    case 'go': return chalk.cyan.bold;
+    default: return chalk.white.bold;
   }
 }
 

@@ -1,11 +1,10 @@
 # Templates Overview
 
-All service templates live in `templates/` and are copied verbatim (with a Spring Boot properties rename step). Current templates:
+Service scaffolding comes from internal templates or official generators:
 
-- `node/` Express + `/health` endpoint
-- `python/` FastAPI + `/health`
-- `go/` net/http server + `/health`
-- `spring-boot/` Java with `/health` REST controller
-- `frontend/` Next.js minimal (or `create-next-app` output when generator used)
+- Internal templates (copied verbatim): `node/`, `python/`, `go/`, `spring-boot/`, `frontend/` (minimal Next.js when not using `--frontend-generator`).
+- External generators (no internal fallback unless added later): Remix (`create-remix`), Astro (`create-astro`), SvelteKit (`sv create` with legacy `create-svelte` fallback).
 
-Each template should stay minimal & dependency-light.
+Spring Boot still performs a post-copy rename of `application.properties.txt` → `application.properties`.
+
+Keep internal templates minimal & dependency-light; external generator outputs are left intact.

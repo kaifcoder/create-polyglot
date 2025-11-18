@@ -119,63 +119,193 @@ if (fs.existsSync(servicesDir)) {
     const svcPath = path.join(cwd, svc.path);
 
     if (!fs.existsSync(svcPath)) continue;
-    // Only auto-run node & frontend services (others require language runtime dev tasks)
-    if (!['node','frontend'].includes(svc.type)) continue;
 
-    const pkgPath = path.join(svcPath, 'package.json');
-    if (!fs.existsSync(pkgPath)) {
-  console.log(`Skipping ${svc.name} (no package.json)`);
-  continue;
-}
+    const color = colorFor(svc.name);
+    let child = null;
 
-let pkg; 
-try {
-  pkg = JSON.parse(fs.readFileSync(pkgPath,'utf-8'));
-} catch {
-  console.log(chalk.yellow(`Skipping ${svc.name} (invalid package.json)`));
-    continue;
-}
+    // Handle different service types
+    switch (svc.type) {
+      case 'node':
+      case 'frontend': {
+        const pkgPath = path.join(svcPath, 'package.json');
+        if (!fs.existsSync(pkgPath)) {
+          console.log(chalk.yellow(`Skipping ${svc.name} (no package.json)`));
+          continue;
+        }
 
-// Determine which script to run
-const useScript = pkg.scripts?.dev ? 'dev' : pkg.scripts?.start ? 'start' : null;
-if (!useScript) {
-   console.log(chalk.yellow(`Skipping ${svc.name} (no "dev" or "start" script)`));
-    continue;
-}
-if (useScript === 'start') {
-  console.log(`running start instead of dev for ${svc.name}`);
-}
+        let pkg;
+        try {
+          pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        } catch {
+          console.log(chalk.yellow(`Skipping ${svc.name} (invalid package.json)`));
+          continue;
+        }
 
-const color = colorFor(svc.name);
-const pm = detectPM(svcPath);
-const cmd = pm === 'yarn' ? 'yarn' : pm === 'pnpm' ? 'pnpm' : pm === 'bun' ? 'bun' : 'npm';
-const args = ['run', useScript]; 
+        // Determine which script to run
+        const useScript = pkg.scripts?.dev ? 'dev' : pkg.scripts?.start ? 'start' : null;
+        if (!useScript) {
+          console.log(chalk.yellow(`Skipping ${svc.name} (no "dev" or "start" script)`));
+          continue;
+        }
+        if (useScript === 'start') {
+          console.log(color(`[${svc.name}] running start instead of dev`));
+        }
 
-    const child = spawn(cmd, args, { cwd: svcPath, env: { ...process.env, PORT: String(svc.port) }, shell: true });
-    procs.push(child);
-    
-    // Register with service manager for PID tracking
-    registerRunningProcess(svc.name, child, svc);
-    
-    child.stdout.on('data', d => process.stdout.write(color(`[${svc.name}] `) + d.toString()));
-    child.stderr.on('data', d => process.stderr.write(color(`[${svc.name}] `) + d.toString()));
-    child.on('exit', code => {
-      // Unregister when process exits
-      unregisterRunningProcess(svc.name);
-      process.stdout.write(color(`[${svc.name}] exited with code ${code}\n`));
-    });
-    // health check
-    const healthUrl = `http://localhost:${svc.port}/health`;
-    const hp = waitForHealth(healthUrl,30000).then(ok => {
-      const msg = ok ? chalk.green(`✔ health OK ${svc.name} ${healthUrl}`) : chalk.yellow(`⚠ health timeout ${svc.name} ${healthUrl}`);
-      console.log(msg);
-    });
-    healthPromises.push(hp);
+        const pm = detectPM(svcPath);
+        const cmd = pm === 'yarn' ? 'yarn' : pm === 'pnpm' ? 'pnpm' : pm === 'bun' ? 'bun' : 'npm';
+        const args = ['run', useScript];
+
+        child = spawn(cmd, args, { cwd: svcPath, env: { ...process.env, PORT: String(svc.port) }, shell: true });
+        break;
+      }
+
+      case 'python': {
+        const venvPath = path.join(svcPath, 'venv');
+        const venvBin = path.join(venvPath, 'bin');
+        const venvPython = path.join(venvBin, 'python');
+        const venvPip = path.join(venvBin, 'pip');
+        const venvUvicorn = path.join(venvBin, 'uvicorn');
+
+        // Create virtual environment if it doesn't exist
+        if (!fs.existsSync(venvPath)) {
+          console.log(color(`[${svc.name}] Creating Python virtual environment...`));
+          const venvCreate = spawn('python3', ['-m', 'venv', 'venv'], { cwd: svcPath, stdio: 'pipe' });
+          venvCreate.stdout.on('data', d => process.stdout.write(color(`[${svc.name}:venv] `) + d.toString()));
+          venvCreate.stderr.on('data', d => process.stderr.write(color(`[${svc.name}:venv] `) + d.toString()));
+          await new Promise(resolve => venvCreate.on('close', resolve));
+        }
+
+        // Check for requirements.txt and install dependencies in venv
+        const reqPath = path.join(svcPath, 'requirements.txt');
+        if (fs.existsSync(reqPath)) {
+          console.log(color(`[${svc.name}] Installing Python dependencies in virtual environment...`));
+          const pipInstall = spawn(venvPip, ['install', '-r', 'requirements.txt'], { cwd: svcPath, stdio: 'pipe' });
+          pipInstall.stdout.on('data', d => process.stdout.write(color(`[${svc.name}:setup] `) + d.toString()));
+          pipInstall.stderr.on('data', d => process.stderr.write(color(`[${svc.name}:setup] `) + d.toString()));
+          await new Promise(resolve => pipInstall.on('close', resolve));
+        }
+
+        // Look for main.py in app/ or root
+        const mainPath = fs.existsSync(path.join(svcPath, 'app', 'main.py'))
+          ? path.join('app', 'main.py')
+          : 'main.py';
+
+        if (!fs.existsSync(path.join(svcPath, mainPath))) {
+          console.log(chalk.yellow(`Skipping ${svc.name} (no ${mainPath} found)`));
+          continue;
+        }
+
+        console.log(color(`[${svc.name}] Starting Python service with uvicorn...`));
+        const module = mainPath.replace(/\//g, '.').replace('.py', '');
+        
+        // Use venv's uvicorn if it exists, otherwise try to install it
+        let uvicornCmd = venvUvicorn;
+        if (!fs.existsSync(venvUvicorn)) {
+          console.log(color(`[${svc.name}] Installing uvicorn in virtual environment...`));
+          const uvicornInstall = spawn(venvPip, ['install', 'uvicorn[standard]', 'fastapi'], { cwd: svcPath, stdio: 'pipe' });
+          uvicornInstall.stdout.on('data', d => process.stdout.write(color(`[${svc.name}:setup] `) + d.toString()));
+          uvicornInstall.stderr.on('data', d => process.stderr.write(color(`[${svc.name}:setup] `) + d.toString()));
+          await new Promise(resolve => uvicornInstall.on('close', resolve));
+        }
+
+        child = spawn(uvicornCmd, [module + ':app', '--reload', '--host', '0.0.0.0', '--port', String(svc.port)], {
+          cwd: svcPath,
+          env: { ...process.env, PORT: String(svc.port) },
+          shell: false
+        });
+        break;
+      }
+
+      case 'go': {
+        // Check for go.mod
+        const goModPath = path.join(svcPath, 'go.mod');
+        if (fs.existsSync(goModPath)) {
+          console.log(color(`[${svc.name}] Installing Go dependencies...`));
+          const goGet = spawn('go', ['mod', 'download'], { cwd: svcPath, stdio: 'pipe' });
+          goGet.stdout.on('data', d => process.stdout.write(color(`[${svc.name}:setup] `) + d.toString()));
+          goGet.stderr.on('data', d => process.stderr.write(color(`[${svc.name}:setup] `) + d.toString()));
+          await new Promise(resolve => goGet.on('close', resolve));
+        }
+
+        // Check for main.go
+        if (!fs.existsSync(path.join(svcPath, 'main.go'))) {
+          console.log(chalk.yellow(`Skipping ${svc.name} (no main.go found)`));
+          continue;
+        }
+
+        console.log(color(`[${svc.name}] Starting Go service...`));
+        child = spawn('go', ['run', 'main.go'], {
+          cwd: svcPath,
+          env: { ...process.env, PORT: String(svc.port) },
+          shell: true
+        });
+        break;
+      }
+
+      case 'java': {
+        // Check for pom.xml (Maven) or build.gradle (Gradle)
+        const pomPath = path.join(svcPath, 'pom.xml');
+        const gradlePath = path.join(svcPath, 'build.gradle');
+        
+        if (fs.existsSync(pomPath)) {
+          console.log(color(`[${svc.name}] Building Java service with Maven...`));
+          const mvnPackage = spawn('mvn', ['clean', 'package', '-DskipTests'], { cwd: svcPath, stdio: 'pipe' });
+          mvnPackage.stdout.on('data', d => process.stdout.write(color(`[${svc.name}:build] `) + d.toString()));
+          mvnPackage.stderr.on('data', d => process.stderr.write(color(`[${svc.name}:build] `) + d.toString()));
+          await new Promise(resolve => mvnPackage.on('close', resolve));
+
+          console.log(color(`[${svc.name}] Starting Java service with Spring Boot...`));
+          child = spawn('mvn', ['spring-boot:run'], {
+            cwd: svcPath,
+            env: { ...process.env, SERVER_PORT: String(svc.port) },
+            shell: true
+          });
+        } else if (fs.existsSync(gradlePath)) {
+          console.log(color(`[${svc.name}] Building Java service with Gradle...`));
+          const gradleBuild = spawn('./gradlew', ['build', '-x', 'test'], { cwd: svcPath, stdio: 'pipe' });
+          gradleBuild.stdout.on('data', d => process.stdout.write(color(`[${svc.name}:build] `) + d.toString()));
+          gradleBuild.stderr.on('data', d => process.stderr.write(color(`[${svc.name}:build] `) + d.toString()));
+          await new Promise(resolve => gradleBuild.on('close', resolve));
+
+          console.log(color(`[${svc.name}] Starting Java service with Gradle...`));
+          child = spawn('./gradlew', ['bootRun'], {
+            cwd: svcPath,
+            env: { ...process.env, SERVER_PORT: String(svc.port) },
+            shell: true
+          });
+        } else {
+          console.log(chalk.yellow(`Skipping ${svc.name} (no pom.xml or build.gradle found)`));
+          continue;
+        }
+        break;
+      }
+
+      default:
+        console.log(chalk.yellow(`Skipping ${svc.name} (unsupported service type: ${svc.type})`));
+        continue;
+    }
+
+    if (child) {
+      procs.push(child);
+      child.stdout.on('data', d => process.stdout.write(color(`[${svc.name}] `) + d.toString()));
+      child.stderr.on('data', d => process.stderr.write(color(`[${svc.name}] `) + d.toString()));
+      child.on('exit', code => {
+        process.stdout.write(color(`[${svc.name}] exited with code ${code}\n`));
+      });
+
+      // Health check
+      const healthUrl = `http://localhost:${svc.port}/health`;
+      const hp = waitForHealth(healthUrl, 30000).then(ok => {
+        const msg = ok ? chalk.green(`✔ health OK ${svc.name} ${healthUrl}`) : chalk.yellow(`⚠ health timeout ${svc.name} ${healthUrl}`);
+        console.log(msg);
+      });
+      healthPromises.push(hp);
+    }
   }
 }
 
   if (!procs.length) {
-    console.log(chalk.yellow('No auto-runnable Node/Frontend services found. Use --docker to start all via compose.'));
+    console.log(chalk.yellow('No services found to start. Use --docker to start all via compose.'));
     // ✅ FIXED: Exit cleanly when running in CI/test mode
     if (process.env.CI === 'true') {
       process.exit(0);
