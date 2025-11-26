@@ -1,10 +1,10 @@
 # Contributor Summary: Shipra-Singh-Asd
 
-**Total Commits:** 19
-**Role:** Plugin System & Testing Specialist
+**Total Commits:** 19+
+**Role:** Plugin System, Resource Monitoring & Testing Specialist
 
 ## Overview
-Shipra-Singh-Asd is a key contributor focused on plugin architecture, shared libraries implementation, testing infrastructure, and build optimization.
+Shipra-Singh-Asd is a key contributor focused on plugin architecture, shared libraries implementation, resource monitoring systems, testing infrastructure, and build optimization.
 
 ## Key Contributions
 
@@ -23,21 +23,29 @@ Shipra-Singh-Asd is a key contributor focused on plugin architecture, shared lib
 
 **Impact**: Made create-polyglot truly extensible, allowing developers to customize scaffolding behavior and add custom functionality through plugins.
 
-### 3. Testing & Quality Assurance
+### 3. Resource Monitoring & Metrics System
+- **Real-time Metrics**: Implemented comprehensive system resource monitoring dashboard
+- **Performance Analytics**: Added CPU, memory, disk, and network monitoring capabilities  
+- **Admin Dashboard**: Built resource metrics integration in admin dashboard
+- **Monitoring Infrastructure**: Created scalable monitoring solution for polyglot services
+
+**Impact**: Enabled developers to monitor system performance in real-time, providing critical insights into resource usage and performance bottlenecks across all services.
+
+### 4. Testing & Quality Assurance
 - **Test Fixes**: Resolved test failures and port conflicts in service-controls tests
 - **Build Issues**: Fixed critical build problems affecting project stability
 - **Port Management**: Implemented better port conflict detection and resolution
 
 **Impact**: Improved project stability and developer confidence through comprehensive testing.
 
-### 4. Node.js Workspace Management
+### 5. Node.js Workspace Management
 - **Duplicate Workspace Fix**: Resolved EDUPLICATEWORKSPACE error by dynamically updating package.json
 - **Name Field Updates**: Implemented automatic name field updates for Node.js services
 - **Workspace Configuration**: Enhanced workspace configuration management
 
 **Impact**: Eliminated common errors when working with multiple Node.js services in monorepo setup.
 
-### 5. Version Management & Releases
+### 6. Version Management & Releases
 - Managed multiple version releases (1.13.0, 1.14.0, 1.15.0, 1.16.0, 1.19.0)
 - Coordinated feature rollouts
 - Ensured version stability
@@ -46,6 +54,7 @@ Shipra-Singh-Asd is a key contributor focused on plugin architecture, shared lib
 
 ## Technical Expertise
 - **Plugin Systems**: Architecture design, hook systems, extensibility patterns
+- **Resource Monitoring**: System metrics, performance analytics, real-time monitoring
 - **Shared Libraries**: Multi-language package management, dependency resolution
 - **Testing**: Unit testing, integration testing, test infrastructure
 - **Build Systems**: Maven, Go modules, Python packaging
@@ -60,14 +69,16 @@ Shipra-Singh-Asd is a key contributor focused on plugin architecture, shared lib
 
 ## Innovation Highlights
 - **First to implement**: Language-specific shared libraries system
-- **Plugin Architecture**: Designed flexible, extensible plugin system
+- **Plugin Architecture**: Designed flexible, extensible plugin system  
+- **Resource Monitoring**: Built comprehensive system metrics and performance monitoring
 - **Testing Infrastructure**: Enhanced test suite for better coverage
 
 ## Areas of Impact
-- **Shared Libraries**: 40% - Templates, documentation, implementation
-- **Plugin System**: 30% - Architecture, hooks, execution pipeline
-- **Testing**: 20% - Test fixes, quality assurance
-- **Build & Configuration**: 10% - Workspace management, build fixes
+- **Shared Libraries**: 30% - Templates, documentation, implementation
+- **Plugin System**: 25% - Architecture, hooks, execution pipeline
+- **Resource Monitoring**: 25% - System metrics, performance monitoring, admin dashboard
+- **Testing**: 15% - Test fixes, quality assurance
+- **Build & Configuration**: 5% - Workspace management, build fixes
 
 ## Problem-Solving Skills
 - Resolved complex workspace naming conflicts

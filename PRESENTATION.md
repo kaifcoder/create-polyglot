@@ -74,8 +74,10 @@ Pre-configured, production-ready templates for:
 **Admin Dashboard**
 - Real-time log streaming via WebSocket
 - Service health monitoring
+- Resource metrics monitoring (CPU, memory, disk, network)
 - Service start/stop/restart controls
 - Live log updates without refresh
+- System performance analytics
 
 **Hot Reload System**
 - Unified hot reload across all languages
@@ -390,6 +392,9 @@ Features:
 - 🎛️ Service controls (start/stop/restart)
 - 🔍 Log filtering and search
 - 📈 Service health status
+- 💻 System resource metrics (CPU, memory, disk, network)
+- 📊 Performance analytics dashboard
+- ⚡ Real-time resource usage monitoring
 
 ### 6.6 Shared Libraries
 
@@ -587,6 +592,7 @@ Make create-polyglot the **industry standard** for polyglot project scaffolding 
 - AWS/GCP/Azure deployment templates
 
 **Observability**
+- Advanced resource monitoring (CPU, memory, disk, network)
 - Logging setup (ELK stack)
 - Monitoring dashboards (Prometheus/Grafana)
 - Distributed tracing
@@ -701,22 +707,25 @@ create-polyglot is built by a diverse team of talented developers, each bringing
 ---
 
 ### 🏅 4. Shipra-Singh-Asd
-**19 commits** | Plugin System & Testing Specialist
+**19+ commits** | Plugin System, Resource Monitoring & Testing Specialist
 
 #### Key Contributions:
 - 🔌 **Plugin System**: Robust hook execution pipeline
 - 📦 **Shared Libraries**: Python, Go, Java library templates
+- 📊 **Resource Monitoring**: Real-time system metrics dashboard
 - 🧪 **Testing Infrastructure**: Fixed test failures, port conflicts
 - 🏗️ **Build Fixes**: Resolved EDUPLICATEWORKSPACE errors
 - 📚 **Documentation**: Shared library usage guides
+- ⚡ **Performance Analytics**: CPU, memory, disk, network monitoring
 
 #### Technical Expertise:
 - Plugin Systems: Architecture, extensibility
+- Resource Monitoring: System metrics, performance analytics
 - Multi-Language: Python, Go, Java packaging
 - Testing: Unit, integration, test infrastructure
 
 #### Impact Quote:
-*"Made create-polyglot truly extensible with a plugin system that allows unlimited customization possibilities."*
+*"Made create-polyglot truly extensible with a plugin system and comprehensive resource monitoring that provides real-time insights into system performance."*
 
 ---
 
@@ -732,11 +741,11 @@ create-polyglot is built by a diverse team of talented developers, each bringing
 ### Contribution Statistics
 
 | Contributor | Commits | Focus Area | Impact Level |
-|-------------|---------|------------|--------------|
+|-------------|---------|------------|-------------|
 | kaifcoder | 48 | Core Architecture | 🔥🔥🔥🔥🔥 |
 | meenu155 | 31 | Features & Security | 🔥🔥🔥🔥 |
 | BhaskarKulshrestha | 28 | DevOps & Automation | 🔥🔥🔥🔥 |
-| Shipra-Singh-Asd | 19 | Extensibility | 🔥🔥🔥 |
+| Shipra-Singh-Asd | 19 | Extensibility & Resource Monitoring | 🔥🔥🔥 |
 
 ### Team Strengths
 
@@ -745,6 +754,7 @@ create-polyglot is built by a diverse team of talented developers, each bringing
 - ✅ Backend mastery (Node.js, Python, Go, Java)
 - ✅ DevOps excellence (CI/CD, automation, testing)
 - ✅ Security awareness (vulnerability fixes, best practices)
+- ✅ Monitoring & Performance (resource metrics, system analytics)
 - ✅ Documentation quality (comprehensive guides, examples)
 
 **Collaborative Culture**:
