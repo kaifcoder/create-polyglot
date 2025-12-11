@@ -56,7 +56,7 @@
     "execa": "^9.6.0",
     "fs-extra": "^11.3.2",
     "hookable": "^5.5.3",
-    "lodash": "^4.17.21",
+    "lodash-es": "^4.17.21",
     "pidusage": "^4.0.1",
     "prompts": "^2.4.2",
     "systeminformation": "^5.27.11",

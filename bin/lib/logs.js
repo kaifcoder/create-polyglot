@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'node:child_process';
 import chalk from 'chalk';
-import _ from 'lodash';
+import { escapeRegExp } from 'lodash-es';
 import chokidar from 'chokidar';
 
 // Log levels and their colors
@@ -123,7 +123,7 @@ async function readLogsFromFile(filePath, options = {}) {
   }
   
   if (options.filter) {
-    const safeFilter = _.escapeRegExp(options.filter);
+    const safeFilter = escapeRegExp(options.filter);
     const regex = new RegExp(safeFilter, 'i');
     logs = logs.filter(log => regex.test(log.message) || regex.test(log.raw));
   }
@@ -801,7 +801,7 @@ export class LogFileWatcher {
     
     // Apply text filter
     if (options.filter) {
-      const safeFilter = _.escapeRegExp(options.filter);
+      const safeFilter = escapeRegExp(options.filter);
       const regex = new RegExp(safeFilter, 'i');
       filteredLogs = filteredLogs.filter(log => 
         regex.test(log.message) || regex.test(log.raw || '')
