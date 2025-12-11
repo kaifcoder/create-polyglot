@@ -82,8 +82,3 @@ jobs:
         with:
           sarif_file: results.sarif
 
-      - name: OSSF Scorecard action
-        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
-        with:
-          sarif_file: results.sarif
-
