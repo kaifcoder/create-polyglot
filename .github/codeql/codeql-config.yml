@@ -1,11 +1,8 @@
 name: "CodeQL Config"
 
 # Exclude template directories that contain placeholder syntax
+# Templates have {{name}} placeholders that aren't valid syntax
 paths-ignore:
-  - templates/
-  - templates/**
-  
-# Include only actual source code
-paths:
-  - bin/
-  - scripts/
+  - "templates/**"
+  - "**/node_modules/**"
+  - "**/test-workspace/**"
