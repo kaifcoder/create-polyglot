@@ -6,7 +6,8 @@
   "scripts": {
     "start": "echo 'running start instead of dev'",
     "create-polyglot": "node ./bin/index.js",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:cleanup",
+    "test:cleanup": "rm -rf test-workspace",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "npm test",
