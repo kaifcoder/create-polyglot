@@ -1,67 +1,163 @@
 # Copilot Instructions for create-polyglot
 
-Purpose: This repo is a CLI (`bin/index.js`) that scaffolds a polyglot monorepo (Node.js, Python/FastAPI, Go, Spring Boot Java, Next.js frontend) with optional Turborepo or Nx presets, docker assets, and a basic concurrent dev runner.
+Purpose: CLI tool (`bin/index.js`) that scaffolds polyglot monorepos with Node.js, Python/FastAPI, Go, Spring Boot Java, Next.js, Remix, Astro, and SvelteKit. Supports Turborepo/Nx presets, Docker orchestration, hot reload, plugin system, and admin dashboard with real-time monitoring.
 
 ## Core Architecture
-- Single entrypoint: `bin/index.js` (ESM). All behavior (prompting, parsing, filesystem generation, process execution) lives here—there is no internal module layering yet.
-- Templates live under `templates/<service>` (node, python, go, spring-boot, frontend). These are copied verbatim; only Spring Boot renames `application.properties.txt` to `application.properties` post-copy.
-- Service selection -> array of objects: `{ type, name, port }`. Ports have defaults: frontend 3000, node 3001, go 3002, java 3003, python 3004. Uniqueness is enforced; conflicts abort.
-- `--services` flag accepts comma separated specs: `type`, or `type:name`, or `type:name:port`. Example: `--services node api:python:5001 go:web:4000`.
-- Preset affects root `package.json` dev script + adds config file (`turbo.json` or `nx.json`). No preset => basic runner (`scripts/dev-basic.cjs`).
-- Docker + `compose.yaml` are generated after templates: each service gets a Dockerfile if missing; compose exposes the same internal and external port.
+- **Entrypoint**: `bin/index.js` (ESM) routes subcommands to modular handlers in `bin/lib/`:
+  - `scaffold.js` - Project initialization, service/plugin/library add/remove
+  - `dev.js` - Local development runner with health checks
+  - `hotreload.js` - Language-specific hot reload orchestration (nodemon, uvicorn, go run, spring-boot)
+  - `admin.js` - HTTP dashboard server with WebSocket log streaming (chokidar-based file watching)
+  - `logs.js` - Log management (viewing, filtering, cleanup, file watching with `LogFileWatcher`)
+  - `service-manager.js` - Process lifecycle management (start/stop/status services)
+  - `plugin-system.js` - Hookable-based plugin lifecycle (60+ hook points)
+  - `resources.js` - System resource monitoring (pidusage, systeminformation)
+  - `ui.js` - CLI rendering helpers (tables via chalk)
 
-## Key Flows
-1. Parse CLI args (commander) -> gather missing info via `prompts` (unless `--yes`).
-2. Build `services` list; validate names (reject reserved), ensure port uniqueness.
-3. Create directory skeleton: `<project>/apps/*`, `packages/shared`, optional preset config.
-4. Write root artifacts: `package.json`, `.eslintrc.cjs`, `.prettierrc`, README, optional git init.
-5. Conditionally run `create-next-app` if frontend + `--frontend-generator` (fallback to internal template on failure).
-6. Generate Dockerfiles + `compose.yaml` (simple internal YAML function, not an external lib).
-7. Install deps unless `--no-install`.
+- **Configuration**: `polyglot.json` manifest drives all commands (services, ports, preset, packageManager, plugins, sharedLibs)
+- **Templates**: `templates/<type>` copied verbatim; Spring Boot special handling (`application.properties.txt` → `.properties`)
+- **Service Model**: Array of `{ type, name, port, path }` where path is `services/<name>` (new) or `apps/<name>` (legacy)
+- **Default Ports**: frontend 3000, node 3001, go 3002, java 3003, python 3004, remix 3005, astro 3006, sveltekit 3007
+- **Reserved Names**: `scripts`, `packages`, `apps`, `node_modules`, `docker`, `compose`, `compose.yaml` rejected during validation
+- **Port Uniqueness**: Enforced at init and add; conflicts abort early with clear error
+
+## Key Workflows
+
+### Scaffolding (`init` command)
+1. Parse CLI args (commander) → gather missing via `prompts` (skip if `--yes`)
+2. Call plugin hook `before:init`
+3. Validate services: check reserved names, port conflicts, valid types
+4. Create directory skeleton: `<project>/services/*`, `packages/shared`, `.polyglot/plugins/`
+5. Write root artifacts: `package.json`, `polyglot.json`, `.eslintrc.cjs`, `.prettierrc`, README
+6. Copy templates from `templates/<type>` → `services/<name>` (conditional `create-next-app` for frontend if `--frontend-generator`)
+7. Generate Dockerfiles (inline logic, no external lib) + `compose.yaml` with `app-net` network
+8. Optional: generate `.github/workflows/ci.yml` if `--with-actions`
+9. Optional: `git init` (non-fatal on failure)
+10. Install deps via `execa` unless `--no-install` (warns on failure, doesn't abort)
+11. Call plugin hook `after:init`
+12. Initialize service logs (`.logs/<date>.log`)
+
+### Service Management
+- **Add service**: Validate name/port → update `polyglot.json` → copy template → generate Dockerfile → call plugin hooks
+- **Remove service**: Prompt confirmation (unless `--yes`) → delete files (unless `--keep-files`) → update `polyglot.json` → rebuild Docker compose
+- **List services**: Read `polyglot.json` → render table or JSON
+
+### Development
+- **`dev` command**: Spawns processes per service type (npm run dev for node/frontend, uvicorn for python, go run for go, mvn spring-boot:run for java) + admin dashboard on port 9000
+- **`dev --docker`**: Delegates to `docker compose up --build`
+- **`hot` command**: Language-specific file watchers with debounced restarts (400ms)
+- **`admin` command**: Starts HTTP server with resource monitoring + WebSocket log streaming (chokidar watches `.logs/*.log`)
+
+### Plugin System
+- Hooks execute via `hookable` library (before/after: init, service:add/remove, dev:start/stop, docker:build, hotreload:*, admin:*, logs:*)
+- Plugins discovered from `.polyglot/plugins/` (local) or `node_modules` (npm)
+- Dependency resolution via `dependencies` array in plugin metadata
+- Enable/disable via `polyglot.json` plugins config
 
 ## Project Conventions
-- ESM at root (`type: module`). Test runner: Vitest (`npm test` => `vitest run`). Keep tests in `tests/` with `.test.js` naming.
-- Single large CLI file is intentional for now; when adding features prefer extracting small helper modules under `bin/` (e.g. `lib/ports.js`) but update imports accordingly.
-- All user-visible output uses `chalk` with emoji prefixes; follow existing style for consistency (info cyan/yellow, success green, errors red with leading symbol).
-- Interactive defaults when `--yes`: projectName 'app', services ['node'], preset none, packageManager npm, git false.
+- **Module system**: ESM (`"type": "module"` in root package.json). All imports use `.js` extensions
+- **Test runner**: Vitest (`npm test` → `vitest run && npm run test:cleanup`). Tests in `tests/*.test.js` with 30s+ timeouts for CLI ops
+- **Output style**: All user-facing messages use `chalk` with consistent emoji prefixes:
+  - Info: `chalk.cyan('🚀 ...')` or `chalk.yellow('⚠️  ...')`
+  - Success: `chalk.green('✅ ...')`
+  - Errors: `chalk.red('❌ ...')` followed by `process.exit(1)` for hard failures
+  - Service logs: color per service via hash of name (see `colorFor()` helper in dev.js, hotreload.js)
+- **Interactive defaults** (when `--yes`): projectName='app', services=['node'], preset=none, packageManager=npm, git=false
+- **File operations**: Use `fs-extra` for async file ops (mkdirp, copy, readJson, writeJson). Use `execa` for spawning commands (not raw child_process except in service-manager.js)
+- **Error handling**: Hard failures (validation errors) exit immediately; soft failures (git init, npm install, external generators) warn and continue
 
-## Edge Case Handling Already Implemented
-- Aborts on invalid service type, duplicate service name, reserved names, invalid port range, or port collision.
-- Graceful fallback if `create-next-app` fails (logs warning then copies template).
-- Git init failure is non-fatal.
-- Dependency install failures log a warning but do not abort scaffold.
+## Validation & Error Handling
+- **Hard failures** (abort immediately):
+  - Invalid service type not in `allServiceChoices` (node, python, go, java, frontend, remix, astro, sveltekit)
+  - Duplicate service name or reserved name (`scripts`, `packages`, `apps`, `node_modules`, `docker`, `compose`, `compose.yaml`)
+  - Port collision (checked in scaffold.js during init and addService)
+  - Invalid port range (must be 1-65535)
+  - Missing `polyglot.json` when running commands in workspace
+- **Soft failures** (warn and continue):
+  - `create-next-app` failure → fallback to internal template
+  - Git init failure → continues without git
+  - Dependency install failure → warns but doesn't abort scaffold
+  - Admin dashboard startup failure → continues dev command without monitoring
 
-## Adding / Modifying Behavior (Examples)
-- New service template: create `templates/<newtype>`; add to `allServiceChoices` + defaultPorts + (optional) Dockerfile generation switch + compose mapping.
-- Custom flags: Extend commander chain; ensure interactive question only added when flag absent. Add to summary + README if user-relevant.
-- Compose enhancements: modify the `composeServices` object; keep network name `app-net` unless a breaking change is intended.
+## Adding Features
+- **New service type**:
+  1. Create `templates/<type>` directory with starter files
+  2. Add to `allServiceChoices` in scaffold.js (line ~141)
+  3. Add default port to `defaultPorts` object
+  4. Add Dockerfile generation logic in scaffold.js (optional, inline templates)
+  5. Add service start command in `service-manager.js` `getStartCommand()` switch
+  6. Update `hot` command watcher in `hotreload.js` if custom restart strategy needed
+- **New CLI flag**: Extend commander `.option()` chain in bin/index.js; add interactive prompt to `interactiveQuestions` array if flag is optional
+- **New hook point**: Add to `HOOK_POINTS` object in `plugin-system.js`; call via `await callHook('hook:name', context)` at appropriate point
 
-## Dev & Testing Workflow
-- Local development: `npm install`, then run CLI directly: `node bin/index.js demo --services node,python --no-install --yes`.
-- Run tests: `npm test` (non-watch). To add tests, mirror `tests/smoke.test.js` pattern; use `execa` to run the CLI inside a temp directory. Keep per-test timeout generous (≥30s) for create-next-app scenarios.
-- When editing templates, no build step—files are copied verbatim. Ensure new template files are included via `files` array in root `package.json` if adding new top-level folders.
+## Dev & Testing
+- **Local dev**: `npm install` → `node bin/index.js init demo --services node,python --no-install --yes`
+- **Run tests**: `npm test` (runs `vitest run && npm run test:cleanup`)
+- **Test patterns**:
+  - Use `execa` to invoke CLI in temp directory (`fs.mkdtempSync(path.join(os.tmpdir(), 'polyglot-test-'))`)
+  - Set generous timeouts (≥30s) for tests involving `create-next-app` or Java builds
+  - Example: `await execa('node', [cliPath, 'init', projName, '--services', 'node', '--no-install', '--yes'], { cwd: tmpDir })`
+  - Clean up with `fs.rmSync(tmpParent, { recursive: true, force: true })` in `afterAll()`
+- **Template changes**: No build step; files copied verbatim. Ensure new top-level folders added to `files` array in package.json
+- **Plugin system tests**: Reset `pluginSystem` state in `beforeEach()` (clear plugins Map, reset hooks via `createHooks()`)
 
-## External Tools & Commands
-- `execa` is used for: `create-next-app`, git commands, and root dependency installation. Maintain `stdio: 'inherit'` for scaffold steps that should stream output.
-- Avoid spawning raw `child_process` unless streaming multi-process dev tasks (already done in `scripts/dev-basic.cjs`). Prefer `execa` for promise-based control.
+## Key Dependencies
+- **Process spawning**: `execa` (CLI invocation, git, npm install) with `stdio: 'inherit'` for user-visible output
+- **File ops**: `fs-extra` (mkdirp, copy, readJson, writeJson)
+- **Prompts**: `prompts` library (interactive CLI; skip if `--yes` or `process.env.CI === 'true'`)
+- **Plugin system**: `hookable` (lifecycle hooks)
+- **Logging**: `chalk` (colored output), `chokidar` (file watching for logs)
+- **Monitoring**: `pidusage` (per-process CPU/memory), `systeminformation` (system-wide stats)
+- **WebSocket**: `ws` library (admin dashboard log streaming)
 
-## Common Pitfalls to Avoid
-- Forgetting to update defaultPorts or Dockerfile switch when adding a service causes incorrect compose or missing Dockerfile.
-- Mutating `services` after port uniqueness check without re-validating can introduce collisions—re-run validation if you add dynamic adjustments.
-- Adding large binary/template assets outside `templates/` may break packaging (root `files` whitelist).
+## Pitfalls to Avoid
+- Forgetting to update `defaultPorts` or `allServiceChoices` when adding a service type causes missing validation/config
+- Mutating `services` array after port uniqueness check without re-validation can introduce collisions
+- Adding large assets outside `templates/` may break npm packaging (check `files` array in package.json)
+- Using `child_process` directly instead of `execa` loses error handling and promise-based control (exception: service-manager.js uses `spawn` for long-running processes)
+- Not resetting plugin system state in tests causes cross-test pollution (hooks remain registered)
 
-## Style & Error Messaging
-- Use concise, user-facing error messages followed by `process.exit(1)` for hard failures before writing scaffolded output.
-- Non-critical failures (git init, install, external generator) should warn and continue.
+## Module Boundaries & Integration Points
 
-## Quick Reference
-- Entry CLI: `bin/index.js`
-- Basic dev runner template: `scripts/dev-basic.cjs`
-- Templates root: `templates/`
-- Tests: `tests/`
-- Workflow pipeline (publish): `.github/workflows/npm-publish.yml` (runs `npm ci && npm test` on release creation, then publishes)
+### Service Lifecycle Integration
+- `bin/index.js` parses commands → delegates to handlers in `bin/lib/`
+- `scaffold.js` writes `polyglot.json` → all other commands read this manifest
+- `dev.js` spawns admin dashboard via `spawn(process.execPath, [cliEntry, 'admin', ...])` (IPC via stdio)
+- `service-manager.js` detects package manager (checks for lock files: package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb)
+- Both `services/<name>` (new) and `apps/<name>` (legacy) paths supported throughout
 
-If adding major refactors (e.g., splitting CLI), document new module boundaries here.
+### Log System Architecture
+- `logs.js` exports `LogFileWatcher` class + helper functions (viewLogs, cleanupOldLogs)
+- Each service gets `.logs/<date>.log` created by `initializeServiceLogs()`
+- `admin.js` instantiates `globalLogWatcher` on dashboard start → emits events (`logsUpdated`, `logsCleared`)
+- WebSocket endpoint `/ws` streams log updates to browser clients (custom protocol, not socket.io)
+- Cache limit: 1000 lines per service in memory (server-side); client-side filters applied without refetch
+
+### Plugin Hook Flow
+- `plugin-system.js` exports `initializePlugins()` (must be called before hooks fire)
+- Plugins discovered from `.polyglot/plugins/<name>/index.js` (local) or `node_modules/@create-polyglot/<name>` (npm)
+- Hook execution order: plugins sorted by dependency graph, then by load order
+- Context objects passed to hooks include `projectDir`, `config`, service details, etc.
+- 60+ hook points across init, service CRUD, dev, docker, hotreload, admin, logs
+
+### Resource Monitoring
+- `resources.js` exports `ResourceMonitor` class (extends EventEmitter)
+- Collects metrics every 5s (configurable): CPU%, memory, disk, network per service
+- History stored in memory (max 720 entries = 1 hour at 5s intervals)
+- Admin dashboard polls `/api/resources` endpoint (server aggregates from monitor instance)
+- Uses `pidusage` for per-process stats, `systeminformation` for OS-level data
+
+## Critical Files Reference
+- **CLI entry**: `bin/index.js` (548 lines, commander-based routing)
+- **Scaffold logic**: `bin/lib/scaffold.js` (1592 lines, handles init/add/remove)
+- **Plugin system**: `bin/lib/plugin-system.js` (511 lines, hookable integration)
+- **Service manager**: `bin/lib/service-manager.js` (369 lines, process spawning)
+- **Log watcher**: `bin/lib/logs.js` (LogFileWatcher class + helpers)
+- **Admin server**: `bin/lib/admin.js` (HTTP + WebSocket for dashboard)
+- **Hot reload**: `bin/lib/hotreload.js` (227 lines, language-specific watchers)
+- **Templates**: `templates/<type>` (node, python, go, spring-boot, frontend, libs/{python,go})
+- **Tests**: `tests/*.test.js` (11 test files, Vitest runner)
+- **CI/CD**: `.github/workflows/npm-publish.yml` (runs on release creation)
 
 ## Admin Dashboard & Log Streaming (Updated)
 The admin dashboard (`startAdminDashboard` in `bin/lib/admin.js`) now uses a chokidar-powered file watcher for real-time service logs.
