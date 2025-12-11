@@ -57,9 +57,25 @@ jobs:
           # By default, queries listed here will override any specified in a config file.
           # Prefix the list here with "+" to use these queries and those in the config file.
 
-      # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
-      # If this step fails, then you should remove it and run the build manually (see below)
+      # Setup Java and Maven for Java language only
+      - name: Set up Temurin JDK
+        if: matrix.language == 'java'
+        uses: actions/setup-java@7a6d8a8234af8eb26422e24e3006232cccaa061b # v4.6.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      # Build Java project explicitly for Java language
+      - name: Build with Maven
+        if: matrix.language == 'java'
+        working-directory: templates/spring-boot
+        run: mvn -B -ntp package -DskipTests
+
+      # Autobuild attempts to build any compiled languages (C/C++, C#, Go).
+      # For Java, we use explicit Maven build steps above instead.
       - name: Autobuild
+        if: matrix.language != 'java'
         uses: github/codeql-action/autobuild@bffd034ab1518ad839a542b8a7356e13a240e076 # v3.31.7
 
       # ℹ️ Command-line programs to run using the OS shell.
