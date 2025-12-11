@@ -35,7 +35,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ["go", "java", "javascript", "python"]
+        language: ["javascript"]
+        # Only JavaScript is analyzed - Python, Go, and Java files are templates only
         # CodeQL supports [ $supported-codeql-languages ]
         # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
 
@@ -58,27 +59,7 @@ jobs:
           # By default, queries listed here will override any specified in a config file.
           # Prefix the list here with "+" to use these queries and those in the config file.
 
-      # Setup Java and Maven for Java language only
-      - name: Set up Temurin JDK
-        if: matrix.language == 'java'
-        uses: actions/setup-java@7a6d8a8234af8eb26422e24e3006232cccaa061b # v4.6.0
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'maven'
-
-      # Build Java project explicitly for Java language
-      - name: Build with Maven
-        if: matrix.language == 'java'
-        working-directory: templates/spring-boot
-        run: mvn -B -ntp package -DskipTests
-
-      # Autobuild attempts to build any compiled languages (C/C++, C#, Go).
-      # For Java, we use explicit Maven build steps above instead.
-      # For Go, skip autobuild since templates/ contains placeholder files
-      - name: Autobuild
-        if: matrix.language != 'java' && matrix.language != 'go'
-        uses: github/codeql-action/autobuild@bffd034ab1518ad839a542b8a7356e13a240e076 # v3.31.7
+      # No autobuild needed for JavaScript - it's interpreted
 
       # ℹ️ Command-line programs to run using the OS shell.
       # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
