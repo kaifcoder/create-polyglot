@@ -1,0 +1,11 @@
+name: "CodeQL Config"
+
+# Exclude template directories that contain placeholder syntax
+paths-ignore:
+  - templates/
+  - templates/**
+  
+# Include only actual source code
+paths:
+  - bin/
+  - scripts/

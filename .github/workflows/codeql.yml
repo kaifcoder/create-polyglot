@@ -53,6 +53,7 @@ jobs:
         uses: github/codeql-action/init@bffd034ab1518ad839a542b8a7356e13a240e076 # v3.31.7
         with:
           languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
           # If you wish to specify custom queries, you can do so here or in a config file.
           # By default, queries listed here will override any specified in a config file.
           # Prefix the list here with "+" to use these queries and those in the config file.
@@ -74,8 +75,9 @@ jobs:
 
       # Autobuild attempts to build any compiled languages (C/C++, C#, Go).
       # For Java, we use explicit Maven build steps above instead.
+      # For Go, skip autobuild since templates/ contains placeholder files
       - name: Autobuild
-        if: matrix.language != 'java'
+        if: matrix.language != 'java' && matrix.language != 'go'
         uses: github/codeql-action/autobuild@bffd034ab1518ad839a542b8a7356e13a240e076 # v3.31.7
 
       # ℹ️ Command-line programs to run using the OS shell.
