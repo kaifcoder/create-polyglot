@@ -148,3 +148,17 @@ vite.config.ts.timestamp-*
 .vscode/*
 .idea/
 test-workspace/
+
+# Java / Maven / Gradle build artifacts
+target/
+*.class
+*.jar
+!**/src/**/*.jar
+*.war
+*.ear
+build/
+.gradle/
+bin/
+.settings/
+.classpath
+.project
